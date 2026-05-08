@@ -135,6 +135,8 @@ namespace overlay
 					{
 						strncpy_s(name_cache, sizeof(name_cache), name, _TRUNCATE);
 					}
+
+					times_name_not_checked = 0;
 				}
 				else
 				{
