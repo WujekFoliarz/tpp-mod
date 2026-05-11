@@ -14,6 +14,8 @@ namespace game
 
 		WEAK symbol<void(void*, unsigned int)> FreeAnnotated{0x140015EF0, 0x140016020, 0x140015EE0, 0x140016020};
 
+		WEAK symbol<QuarkSystemTable*()> GetQuarkSystemTable{0x146CDE8D0, 0x148F1D020, 0x148B24E40, 0x148051AD0};
+
 		namespace AssetConfiguration_
 		{
 			WEAK symbol<SharedString*()> GetLanguage{0x140171180, 0x1401727C0, 0x1401711F0, 0x140172770};
@@ -271,6 +273,7 @@ namespace game
 				WEAK symbol<char(FobTarget*)> CreateHostSession{0x1459F3E20, 0x0, 0x147441470, 0x0};
 				WEAK symbol<char(FobTarget*, SessionConnectInfo*)> CreateClientSession{0x1459F3910, 0x0, 0x147440F30, 0x0};
 				WEAK symbol<char(FobTarget*, tpp::mbm::PlayerBasicInfo*, int, unsigned int, char, char)> RequestDetail{0x1407F0420, 0x0, 0x1407F0050, 0x0};
+				WEAK symbol<void(FobTarget*, tpp::mbm::PlayerBasicInfo*, FobTargetInfo*)> ReceiveBasicInfoCommon{0x1407EDDD0, 0x0, 0x1407EDA00, 0x0};
 			}
 
 			namespace Daemon_
@@ -286,6 +289,18 @@ namespace game
 			namespace FobP2pNameResolver_
 			{
 				WEAK symbol<const char*(FobP2pNameResolver*)> GetPeerName{0x145AF8580, 0x0, 0x1474CE7E0, 0x0};
+			}
+
+			namespace DisplayName_
+			{
+				WEAK symbol<void(DisplayName*)> ClearList{0x1407D6C40, 0x0, 0x1407D6890, 0x0};
+				WEAK symbol<void(DisplayName*, fox::gk::FirstPartyAccount*)> AddList{0x1407D6C10, 0x0, 0x1407D6860, 0x0};
+				WEAK symbol<void(DisplayName*)> GetDisplayName{0x1407D6D90, 0x0, 0x1407D69E0, 0x0};
+			}
+
+			namespace DisplayNameManager_
+			{
+				WEAK symbol<void(fox::gk::FirstPartyAccount*, PlayerPlatformInfo)> SetFirstPartyAccount{0x14598F460, 0x0, 0x1407D6C00, 0x0};
 			}
 		}
 
