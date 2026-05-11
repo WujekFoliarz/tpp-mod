@@ -41,6 +41,13 @@ namespace overlay
 
 		cg_perf_data cg_perf{};
 
+		struct ping_text_cont_t
+		{
+			char buffer[0x40];
+			float* color;
+			std::mutex mutex;
+		} ping_text_cont{};
+
 		void perf_calc_fps(cg_perf_data* data, const std::int32_t value)
 		{
 			data->history[data->index % 32] = value;
@@ -84,124 +91,102 @@ namespace overlay
 			perf_calc_fps(&cg_perf, static_cast<int>(1.f / time_system.frameTime));
 		}
 
-		bool is_device_open()
+		game::fox::nt::Member* get_peer_member(game::fox::nt::impl::SessionImpl2* session)
 		{
-			const auto inst = game::tpp::ui::menu::UiCommonDataManager_::GetInstance();
-			if (inst == nullptr)
+			for (auto i = 1u; i < session->allMembers.size; i++)
 			{
-				return false;
+				if (session->allMembers.members[i] != nullptr && session->allMembers.members[i]->flags != 0)
+				{
+					return session->allMembers.members[i];
+				}
 			}
-
-			return game::tpp::ui::menu::impl::MotherBaseDeviceSystemImpl_::IsDeviceOpend();
+			
+			return nullptr;
 		}
 
-		const char* get_opponent_fob_name_and_rtt()
+		void generate_ping_text(ping_text_cont_t& ping_text_cont_)
 		{
-			static char name_cache[128] = "[UNKNOWN]";
-			static int times_name_not_checked = 0;
-
 			const auto main_session = *game::s_pSession;
-			if (!main_session || !game::environment::is_tpp())
+			if (main_session == nullptr)
 			{
-				return "";
+				return;
 			}
 
-			const auto all_members = &main_session->allMembers;
-			for (auto i = 0u; i < all_members->size; i++)
+			const auto session_state = session::get_state(main_session);
+			const auto rtt = session::get_rtt(main_session);
+
+			const auto calc_color = [&](const int rtt)
 			{
-				const auto member = all_members->members[i];
+				ping_text_cont_.color = rtt < 100 ? color_good : (rtt < 200 ? color_ok : color_bad);
+			};
 
-				if (member == nullptr || member->flags == 0)
+			switch (session_state)
+			{
+			case 2:
+			case 3:
+			{
+				ping_text_cont_.color = color_good;
+				const auto peer = get_peer_member(main_session);
+				if (game::environment::is_tpp() && peer != nullptr && peer->sppSocket != nullptr && peer->sppSocket->tpp.rtt_time != -1)
 				{
-					continue;
-				}
-
-				const auto ping = member->sppSocket != nullptr ? member->sppSocket->tpp.rtt_time : -1;
-
-				if (ping == -1)
-				{
-					continue;
-				}
-
-				if (times_name_not_checked >= 500)
-				{
+					game::steam_id user_id{};
+					user_id.bits = peer->sessionUserId->userId;
 					const auto steam_friends = (*game::SteamFriends)();
-					game::steam_id steam_id{};
-					steam_id.bits = member->sessionUserId->userId;
-
-					const char* name = steam_friends->__vftable->GetFriendPersonaName(steam_friends, steam_id);
-
-					if (name && name[0])
-					{
-						strncpy_s(name_cache, sizeof(name_cache), name, _TRUNCATE);
-					}
-
-					times_name_not_checked = 0;
+					const auto name = steam_friends->__vftable->GetFriendPersonaName(steam_friends, user_id);
+					calc_color(peer->sppSocket->tpp.rtt_time);
+					snprintf(ping_text_cont_.buffer, sizeof(ping_text_cont_.buffer), "%s - %ims", name, peer->sppSocket->tpp.rtt_time);
 				}
 				else
 				{
-					times_name_not_checked++;
+					strcpy_s(ping_text_cont_.buffer, sizeof(ping_text_cont_.buffer), "HOST");
 				}
-
-
-				static char buf[256]{};
-				snprintf(buf, sizeof(buf), "%s - %dms", name_cache, ping);
-				return buf;
+				break;
 			}
-
-			return "";
+			case 4:
+			case 5:
+			case 6:
+			{
+				ping_text_cont_.color = color_ok;
+				strcpy_s(ping_text_cont_.buffer, sizeof(ping_text_cont_.buffer), "CONNECTING");
+				break;
+			}
+			case 7:
+			{
+				calc_color(rtt);
+				snprintf(ping_text_cont_.buffer, sizeof(ping_text_cont_.buffer), "%ims", rtt);
+			}
+			}
 		}
 
-		int get_opponent_fob_rtt()
+		void update_ping_text()
 		{
-			const auto main_session = *game::s_pSession;
-			if (!main_session || !game::environment::is_tpp())
+			ping_text_cont_t new_ping_text{};
+			generate_ping_text(new_ping_text);
+			std::lock_guard _0(ping_text_cont.mutex);
+			std::memcpy(ping_text_cont.buffer, new_ping_text.buffer, sizeof(ping_text_cont.buffer));
+			ping_text_cont.color = new_ping_text.color;
+		}
+
+		const char* get_ping_text(float** color)
+		{
+			static char buffer[0x40]{};
+			std::lock_guard _0(ping_text_cont.mutex);
+
+			if (ping_text_cont.buffer[0] == 0)
 			{
-				return -1;
+				return nullptr;
 			}
 
-			const auto all_members = &main_session->allMembers;
-			for (auto i = 0u; i < all_members->size; i++)
-			{
-				const auto member = all_members->members[i];
-
-				if (member == nullptr || member->flags == 0)
-				{
-					continue;
-				}
-
-				const auto ping = member->sppSocket != nullptr ? member->sppSocket->tpp.rtt_time : -1;
-
-				if (ping == -1)
-				{
-					continue;
-				}
-
-				return ping;
-			}
-
-			return -1;
+			std::memcpy(buffer, ping_text_cont.buffer, sizeof(ping_text_cont.buffer));
+			*color = ping_text_cont.color;
+			return buffer;
 		}
 
 		void draw_overlay(game::fox::gr::dg::plugins::Draw2DRenderer* instance)
 		{
 			const auto fps = static_cast<int>(cg_perf.average);
 
-			const auto main_session = *game::s_pSession;
-			int rtt = -1;
-
-			if (game::environment::is_tpp())
-			{
-				rtt = get_opponent_fob_rtt();
-			}
-
-			if (game::environment::is_mgo() || rtt == -1)
-			{
-				rtt = session::get_rtt(main_session);
-			}
-
 			const auto fps_color = fps >= 60 ? color_good : (fps >= 30 ? color_ok : color_bad);
-			auto ping_color = rtt < 100 ? color_good : (rtt < 200 ? color_ok : color_bad);
 
 			auto margin = 8.f;
 			auto offset_x = 1280.f - margin;
@@ -210,49 +195,18 @@ namespace overlay
 			constexpr const auto font_size = 14.f;
 			const auto line_height = 18.f;
 
-			const char* ping_text = nullptr;
-			const auto session_state = session::get_state(main_session);
+			const auto draw_fps = var_ui_draw_fps->current.enabled();
+			const auto draw_ping = var_ui_draw_ping->current.enabled();
 
-			if (var_ui_draw_ping->current.enabled() && main_session != nullptr && session_state > 0)
+			if (!draw_ping && !draw_fps)
 			{
-				switch (session_state)
-				{
-				case 2:
-				case 3:
-					ping_text = "HOST";
-
-					if (game::environment::is_tpp())
-					{
-						ping_text = "0ms";
-
-						const char* fob_ui_ping = get_opponent_fob_name_and_rtt();
-						if (fob_ui_ping != nullptr && fob_ui_ping[0] != '\0')
-						{
-							ping_text = fob_ui_ping;
-						}
-					}
-
-					break;
-				case 4:
-				case 5:
-				case 6:
-					ping_text = "CONNECTING";
-					ping_color = color_ok;
-					break;
-				case 7:
-					ping_text = utils::string::va("%ims", rtt);
-
-					if (game::environment::is_tpp())
-					{
-						const char* fob_ui_ping = get_opponent_fob_name_and_rtt();
-						if (fob_ui_ping != nullptr && fob_ui_ping[0] != '\0')
-						{
-							ping_text = fob_ui_ping;
-						}
-					}
-					break;
-				}
+				return;
 			}
+
+			float* ping_color{};
+			const auto ping_text = draw_ping
+				? get_ping_text(&ping_color)
+				: nullptr;
 
 			const auto fps_text = utils::string::va("%i", fps);
 
@@ -269,14 +223,14 @@ namespace overlay
 				return;
 			}
 
-			if (var_ui_draw_fps->current.enabled())
+			if (draw_fps)
 			{
 				box_width += fps_width;
 			}
 
 			if (ping_text != nullptr)
 			{
-				if (var_ui_draw_fps->current.enabled())
+				if (draw_fps)
 				{
 					box_width += margin;
 				}
@@ -293,7 +247,7 @@ namespace overlay
 			offset_x -= margin;
 			const auto text_y = margin + 1.5f;
 
-			if (var_ui_draw_fps->current.enabled())
+			if (draw_fps)
 			{
 				offset_x -= fps_width;
 				renderer::draw_text(instance, "fps:", font_size, offset_x, text_y, color_text, color_outline);
@@ -303,7 +257,7 @@ namespace overlay
 			if (ping_text != nullptr)
 			{
 				offset_x -= ping_width;
-				if (var_ui_draw_fps->current.enabled())
+				if (draw_fps)
 				{
 					offset_x -= margin;
 				}
@@ -328,7 +282,8 @@ namespace overlay
 
 		void start() override
 		{
-			scheduler::loop(perf_update, scheduler::pipeline::main);
+			scheduler::loop(perf_update, scheduler::main);
+			scheduler::loop(update_ping_text, scheduler::session);
 		}
 	};
 }
