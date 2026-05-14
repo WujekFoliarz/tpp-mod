@@ -274,6 +274,11 @@ namespace overlay
 	public:
 		void pre_load() override
 		{
+			if (game::environment::is_dedi())
+			{
+				return;
+			}
+
 			var_ui_draw_fps = vars::register_bool("ui_draw_fps", 0, vars::var_flag_saved, "draw fps counter");
 			var_ui_draw_ping = vars::register_bool("ui_draw_ping", 0, vars::var_flag_saved, "draw ping counter");
 
@@ -282,6 +287,11 @@ namespace overlay
 
 		void start() override
 		{
+			if (game::environment::is_dedi())
+			{
+				return;
+			}
+
 			scheduler::loop(perf_update, scheduler::main);
 			scheduler::loop(update_ping_text, scheduler::session);
 		}
