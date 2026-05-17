@@ -389,6 +389,8 @@ namespace fobs
 				});
 			}
 
+			option->num = 32;
+
 			return cmd_get_fob_target_list_option_pack_hook.invoke<char>(option);
 		}
 

@@ -262,7 +262,6 @@ namespace overlay
 					offset_x -= margin;
 				}
 
-
 				renderer::draw_text(instance, "ping:", font_size, offset_x, text_y, color_text, color_outline);
 				renderer::draw_text(instance, ping_text, font_size, offset_x + ping_label_width, text_y, ping_color, color_outline);
 			}
