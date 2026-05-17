@@ -7,6 +7,8 @@
 #include "scheduler.hpp"
 #include "console.hpp"
 #include "vars.hpp"
+#include "session.hpp"
+#include "filesystem.hpp"
 
 #include "directx/directx.hpp"
 
@@ -256,6 +258,64 @@ namespace dedicated_server
 
 			return on_player_connect_hook.invoke<__int64>(a1, index);
 		}
+
+		utils::hook::detour on_init_frame_hook;
+		void* on_init_frame_stub(void* a1, void* a2)
+		{
+			const auto weather = *game::tpp::sys::WeatherManager_::m_instance;
+			if (weather != nullptr && weather->clock != nullptr)
+			{
+				weather->clock->pause = true;
+			}
+			return on_init_frame_hook.invoke<void*>(a1, a2);
+		}
+
+		void run_frame()
+		{
+			static const char* ruleset_names[] =
+			{
+				"RULESET_STATE_INACTIVE",
+				"RULESET_STATE_GAME_START",
+				"RULESET_STATE_GET_MISSION_INFO",
+				"RULESET_STATE_BRIEFING",
+				"RULESET_STATE_ROUND_COUNTDOWN",
+				"RULESET_STATE_ROUND_REGULAR_PLAY",
+				"RULESET_STATE_ROUND_OVERTIME",
+				"RULESET_STATE_ROUND_SUDDEN_DEATH",
+				"RULESET_STATE_ROUND_END",
+				"RULESET_STATE_ROUND_RESULTS",
+				"RULESET_STATE_DISTRIBUTE_RESULTS",
+				"RULESET_STATE_FINAL_RESULTS",
+				"RULESET_STATE_MISSION_RESULTS",
+				"RULESET_STATE_END_OF_MATCH_FLOW",
+				"RULESET_STATE_GAME_END",
+			};
+
+			static auto prev_state = 0;
+			static auto did_rotate = false;
+
+			const auto ruleset = session::get_active_ruleset();
+			if (ruleset == nullptr)
+			{
+				prev_state = 0;
+				return;
+			}
+
+			if (prev_state != ruleset->state)
+			{
+				did_rotate = false;
+				console::info("[RulesetManager] state changed: %s (%i)", ruleset_names[ruleset->state], ruleset->state);
+			}
+
+			prev_state = ruleset->state;
+
+			if (ruleset->state >= 13 && ruleset->currentRound == 2 && 
+				ruleset->unk1.__vftable->GetTimeSpentInCurrentState(&ruleset->unk1) > 40.f && !did_rotate)
+			{
+				did_rotate = true;
+				game::s_mgoMatchMakingManager->state = 21;
+			}
+		}
 	}
 
 	void unban_player_from_session(const game::steam_id steam_id)
@@ -265,9 +325,15 @@ namespace dedicated_server
 
 	void ban_player_from_session(const game::steam_id steam_id)
 	{
-		const auto steam_networking = (*game::SteamNetworking)();
-		const auto channel = get_client_net_channel(get_lobby_id(), steam_id);
-		steam_networking->__vftable->CloseP2PChannelWithUser(steam_networking, steam_id, channel);
+		const auto lobby_id = get_lobby_id();
+
+		if (lobby_id.bits != 0)
+		{
+			const auto steam_networking = (*game::SteamNetworking)();
+			const auto channel = get_client_net_channel(lobby_id, steam_id);
+			steam_networking->__vftable->CloseP2PChannelWithUser(steam_networking, steam_id, channel);
+		}
+
 		banned_players.insert(steam_id.bits);
 	}
 
@@ -281,7 +347,9 @@ namespace dedicated_server
 
 		void start() override
 		{
-			if (!game::environment::is_mgo() || !game::environment::is_eng())
+			filesystem::register_resource_file("config\\server.cfg", RESOURCE_SERVER_CFG);
+
+			if (!game::environment::is_mgo())
 			{
 				return;
 			}
@@ -316,12 +384,18 @@ namespace dedicated_server
 
 			utils::hook::set<std::uint8_t>(0x14A1E39C0, 0xC3); // dont draw 2d
 
-
 			utils::hook::nop(0x14258DC10, 5);
 			utils::hook::set<std::uint8_t>(0x14258B600, 0xC3);
 			translate_messages_hook.create(0x142590640, translate_messages_stub);
 
 			on_player_connect_hook.create(0x140829570, on_player_connect_stub); // dont spawn host
+			on_init_frame_hook.create(0x146F43EA0, on_init_frame_stub); // fix weather clock
+			
+			utils::hook::jump(0x14125F627, 0x14125FFF6); // weird crash
+
+			utils::hook::jump(0x14057F360, 0x14057F3D0); // always go to next match
+
+			scheduler::loop(run_frame, scheduler::main);
 		}
 	};
 }

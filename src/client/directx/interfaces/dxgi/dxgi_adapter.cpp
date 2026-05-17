@@ -10,9 +10,8 @@ namespace directx
 	{
 		HRESULT __stdcall enum_outputs(void*, UINT index, IDXGIOutput** output)
 		{
-			if (index > 1)
+			if (index > 0)
 			{
-				*output = NULL;
 				return DXGI_ERROR_NOT_FOUND;
 			}
 
@@ -22,14 +21,18 @@ namespace directx
 
 		HRESULT __stdcall get_desc(void*, DXGI_ADAPTER_DESC* desc)
 		{
-			desc->DedicatedVideoMemory = 1;
-			desc->DedicatedSystemMemory = 1;
-			desc->SharedSystemMemory = 1;
+			std::memset(desc, 0, sizeof(DXGI_ADAPTER_DESC));
 			return S_OK;
 		}
 
 		HRESULT __stdcall check_interface_support(void*, GUID*, LARGE_INTEGER*)
 		{
+			return S_OK;
+		}
+
+		HRESULT __stdcall get_desc1(void*, DXGI_ADAPTER_DESC1* desc)
+		{
+			std::memset(desc, 0, sizeof(DXGI_ADAPTER_DESC1));
 			return S_OK;
 		}
 	}
@@ -44,7 +47,7 @@ namespace directx
 		vtable.enum_outputs = enum_outputs;
 		vtable.get_desc = get_desc;
 		vtable.check_interface_support = check_interface_support;
-		vtable.get_desc1 = get_desc;
+		vtable.get_desc1 = get_desc1;
 
 		return &instance;
 	}

@@ -278,7 +278,7 @@ namespace patches
 
 			if (game::environment::is_dedi())
 			{
-				var_max_fps = vars::register_int("com_max_fps", 30, 30, 60, 0, "server max fps");
+				var_max_fps = vars::register_int("com_max_fps", 100, 0, 1000, 0, "server max fps");
 			}
 			else
 			{
@@ -351,7 +351,7 @@ namespace patches
 			// disable _purecall error
 			utils::hook::set<std::uint8_t>(SELECT_VALUE(0x141A05B96, 0x141461F6A, 0x141A05CB6, 0x141461E0A), 0xC3);
 
-			if (var_unlock_fps->latched.enabled())
+			if (var_unlock_fps->latched.enabled() || game::environment::is_dedi())
 			{
 				unlock_fps();
 			}

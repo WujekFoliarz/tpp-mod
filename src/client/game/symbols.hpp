@@ -184,7 +184,10 @@ namespace game
 	{
 		namespace sys
 		{
-
+			namespace WeatherManager_
+			{
+				WEAK symbol<WeatherManager*> m_instance{0x0, 0x141F69870, 0x0, 0x0};
+			}
 		}
 
 		namespace gm
@@ -306,9 +309,9 @@ namespace game
 
 		namespace mp
 		{
-			namespace RulsetManager_
+			namespace RulesetManager_
 			{
-				WEAK symbol<RuleSetManager*> s_instance{0x0, 0x14204CB18, 0x0, 0x14204CB48};
+				WEAK symbol<RulesetManager*> s_instance{0x0, 0x14204CB18, 0x0, 0x14204CB48};
 			}
 		}
 	}

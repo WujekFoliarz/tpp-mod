@@ -61,7 +61,7 @@ namespace session
 			}
 			else
 			{
-				printf("num flags ping steam_id                         name                             team\n");
+				printf("num flags ping  steam_id                         name                             team\n");
 				printf("--- ----- ----- -------------------------------- -------------------------------- ----\n");
 			}
 
@@ -303,14 +303,14 @@ namespace session
 		}
 	}
 
-	game::tpp::mp::RuleSet* get_active_ruleset()
+	game::tpp::mp::Ruleset* get_active_ruleset()
 	{
 		if (game::environment::is_tpp())
 		{
 			return nullptr;
 		}
 
-		const auto ruleset_manager = *game::tpp::mp::RulsetManager_::s_instance;
+		const auto ruleset_manager = *game::tpp::mp::RulesetManager_::s_instance;
 		if (ruleset_manager == nullptr || ruleset_manager->unk1 == nullptr || ruleset_manager->unk1->activeRuleset == nullptr)
 		{
 			return nullptr;
@@ -352,6 +352,43 @@ namespace session
 	class component final : public component_interface
 	{
 	public:
+		void pre_load() override
+		{
+			command::add("ban", [](const command::params& params)
+			{
+				if (params.size() < 2)
+				{
+					console::info("usage: ban <steam id>\n");
+					return;
+				}
+
+				const auto id = params.get_uint64(1);
+				scheduler::once([id]
+				{
+					game::steam_id steam_id{.bits = id};
+					matchmaking::ban_player_from_lobby(id);
+					dedicated_server::ban_player_from_session(steam_id);
+				}, scheduler::session);
+			});
+
+			command::add("unban", [](const command::params& params)
+			{
+				if (params.size() < 2)
+				{
+					console::info("usage: unban <steam id>\n");
+					return;
+				}
+
+				const auto id = params.get_uint64(1);
+				scheduler::once([id]
+				{
+					game::steam_id steam_id{.bits = id};
+					matchmaking::unban_player_from_lobby(id);
+					dedicated_server::unban_player_from_session(steam_id);
+				}, scheduler::session);
+			});
+		}
+
 		void start() override
 		{
 			scheduler::loop(run_frame, scheduler::session);
