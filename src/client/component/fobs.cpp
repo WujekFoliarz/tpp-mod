@@ -11,16 +11,23 @@
 #include <utils/hook.hpp>
 #include <utils/string.hpp>
 #include <utils/concurrency.hpp>
+#include <utils/http.hpp>
 
 namespace fobs
 {
 	namespace
 	{
 		vars::var_ptr var_fob_security_challenge_mode;
+		vars::var_ptr var_send_player_ids_to_whopener;
 
 		bool custom_lobbies_enabled()
 		{
 			return var_fob_security_challenge_mode->current.get_int() == 1;
+		}
+
+		bool should_send_to_website()
+		{
+			return var_send_player_ids_to_whopener->current.get_int() == 1;
 		}
 
 		void on_lobby_match_list(game::LobbyMatchList_t* match_list);
@@ -389,7 +396,7 @@ namespace fobs
 				});
 			}
 
-			option->num = 32;
+			option->num = 30;
 
 			return cmd_get_fob_target_list_option_pack_hook.invoke<char>(option);
 		}
@@ -409,6 +416,30 @@ namespace fobs
 				{
 					wait_for_lobby_list();
 				}
+			}
+			
+			if (should_send_to_website() && list->type.data->buffer != "EVENT"s)
+			{
+				static const utils::http::headers headers =
+				{
+					{"Content-Type", "application/json"}
+				};
+
+				nlohmann::json data = nlohmann::json::array();
+
+				for (int i = 0; i < list->target_count; i++)
+				{
+					nlohmann::json entry;
+					entry["steam_id"] = std::to_string(list->targets[i].owner_info.xuid);
+					entry["konami_id"] = std::to_string(list->targets[i].owner_info.playerId);
+					data.push_back(entry);
+				}
+
+				auto response = utils::http::post_data_async(
+					"http://maluch.mikr.us:20151/sendplayeridbatch",
+					headers,
+					data.dump()
+				);
 			}
 
 			return res;
@@ -704,6 +735,8 @@ namespace fobs
 
 			var_fob_security_challenge_mode = vars::register_int("fob_security_challenge_mode", 0, 0, 1,
 				vars::var_flag_saved, "security challenge mode (0 = konami, 1 = steam lobbies)");
+
+			var_send_player_ids_to_whopener = vars::register_int("fob_send_player_ids_to_whopener", 0, 0, 1, vars::var_flag_saved, "sends player ids automatically to whopener website, you need to be whitelisted");
 		}
 
 		void start() override
