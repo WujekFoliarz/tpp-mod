@@ -22,8 +22,10 @@ namespace patches
 		vars::var_ptr var_name;
 		vars::var_ptr var_max_fps;
 		vars::var_ptr var_sensitivity;
-		vars::var_ptr var_camera_fov_scale;
-		vars::var_ptr var_camera_fist_person_fov_scale;
+		vars::var_ptr var_sensitivity_patch;
+		vars::var_ptr var_camera_fovscale;
+		vars::var_ptr var_camera_fp_fovscale;
+		vars::var_ptr var_camera_fp_preserve;
 
 		void set_timer_resolution()
 		{
@@ -77,12 +79,10 @@ namespace patches
 
 			constexpr auto nano_secs = std::chrono::duration_cast<std::chrono::nanoseconds>(1s);
 			const auto target_frame_time = nano_secs / max_fps;
-			const auto frame_time = std::chrono::steady_clock::now() - scheduler::main_frame_begin;
-			const auto diff = target_frame_time - frame_time;
 
-			if (diff > 0ms)
+			while ((std::chrono::steady_clock::now() - scheduler::main_frame_begin) < target_frame_time)
 			{	
-				std::this_thread::sleep_for(diff);
+				std::this_thread::sleep_for(1ms);
 			}
 		}
 
@@ -165,6 +165,31 @@ namespace patches
 			get_persona_name_hook.create(steam_friends->__vftable->GetPersonaName, get_persona_name_stub);
 		}
 
+		void player_mouse_event_update_stub(__int64 a1)
+		{
+			const auto time_system = game::fox::GetTimeSystem();
+			const auto frame_time_scale = static_cast<float>(time_system.frameTime) * 100.f;
+
+			const auto v_x = *reinterpret_cast<LONG*>(a1 + 40);
+			const auto v_y = *reinterpret_cast<LONG*>(a1 + 44);
+
+			InterlockedExchangeAdd(reinterpret_cast<LONG*>(a1 + 40), -v_x);
+			InterlockedExchangeAdd(reinterpret_cast<LONG*>(a1 + 44), -v_y);
+
+			*reinterpret_cast<void**>(a1 + 48) = *reinterpret_cast<void**>(a1 + 32);
+
+			if (var_sensitivity_patch->current.enabled())
+			{
+				*reinterpret_cast<float*>(a1 + 56) = static_cast<float>(v_x) * 0.001f * frame_time_scale;
+				*reinterpret_cast<float*>(a1 + 60) = static_cast<float>(v_y) * 0.001f * frame_time_scale;
+			}
+			else
+			{
+				*reinterpret_cast<float*>(a1 + 56) = static_cast<float>(v_x) * 0.001f;
+				*reinterpret_cast<float*>(a1 + 60) = static_cast<float>(v_y) * 0.001f;
+			}
+		}
+
 		void patch_sensitivity()
 		{
 			constexpr const auto base_value = 0.016683333f;
@@ -178,6 +203,8 @@ namespace patches
 			};
 
 			var_sensitivity->set_callback->operator()();
+
+			utils::hook::jump(SELECT_VALUE(0x14627C0C0, 0x146C09510, 0x147F4C990, 0x1476CD770), player_mouse_event_update_stub);
 		}
 
 		void scale_fov(game::tpp::gm::player::impl::PlayerCameraImpl* camera, vars::var_ptr var)
@@ -197,27 +224,34 @@ namespace patches
 		void subjective_camera_set_parameter_stub(void* a1, void* a2, void* a3, __int64 a4)
 		{
 			subjective_camera_set_parameter_hook.invoke<void>(a1, a2, a3, a4);
-			scale_fov(*reinterpret_cast<game::tpp::gm::player::impl::PlayerCameraImpl**>(a4 + 8), var_camera_fist_person_fov_scale);
+			scale_fov(*reinterpret_cast<game::tpp::gm::player::impl::PlayerCameraImpl**>(a4 + 8), var_camera_fp_fovscale);
 		}
 
 		utils::hook::detour player_camera_set_tps_params_hook;
 		void player_camera_set_tps_params_stub(game::tpp::gm::player::impl::PlayerCameraImpl* camera, void* params)
 		{
 			player_camera_set_tps_params_hook.invoke<void>(camera, params);
-			scale_fov(camera, var_camera_fov_scale);
+			scale_fov(camera, var_camera_fovscale);
 		}
 
 		utils::hook::detour player_camera_set_around_params_hook;
 		void player_camera_set_around_params_stub(game::tpp::gm::player::impl::PlayerCameraImpl* camera, void* params)
 		{
 			player_camera_set_around_params_hook.invoke<void>(camera, params);
-			scale_fov(camera, var_camera_fov_scale);
+			scale_fov(camera, var_camera_fovscale);
 		}
 
 		bool check_update_fov()
 		{
-			const auto changed = var_camera_fov_scale->changed;
-			var_camera_fov_scale->changed = false;
+			const auto changed = var_camera_fovscale->changed;
+			var_camera_fovscale->changed = false;
+			return changed;
+		}
+
+		bool check_update_fov_fps()
+		{
+			const auto changed = var_camera_fp_fovscale->changed;
+			var_camera_fp_fovscale->changed = false;
 			return changed;
 		}
 
@@ -255,13 +289,145 @@ namespace patches
 			a.jmp(SELECT_VALUE(0x14101E5CC, 0x14101648A, 0x14101E61C, 0x141015B6A));
 		}
 
+		void tps_camera_update_parameter_stub(utils::hook::assembler& a)
+		{
+			const auto no_update = a.new_label();
+
+			a.sub(rsp, 0x28);
+			a.mov(rax, qword_ptr(rcx, 8));
+			a.mov(edx, qword_ptr(rax, SELECT_VALUE_NOLANG(0x204, 0x1F4)));
+			a.shr(edx, 2);
+
+			a.push(rax);
+			a.pushad64();
+			a.call_aligned(check_update_fov);
+			a.mov(qword_ptr(rsp, 0x80), rax);
+			a.popad64();
+			a.pop(rax);
+
+			a.and_(dl, 1);
+			a.or_(dl, al);
+			a.test(dl, dl);
+			a.jz(no_update);
+			a.jmp(SELECT_VALUE(0x149CE7BD6, 0x14C13FBD6, 0x14A6AE6F6, 0x14BFD0A46));
+
+			a.bind(no_update);
+			a.xor_(al, al);
+			a.add(rsp, 0x28);
+			a.ret();
+		}
+
+		void subjective_camera_update_parameter_stub(utils::hook::assembler& a)
+		{
+			const auto loop = a.new_label();
+			const auto no_update = a.new_label();
+
+			a.ror(rbx, 1);
+			a.sub(rdi, 8);
+			a.dec(esi);
+			a.jns(loop);
+
+			a.push(rax);
+			a.pushad64();
+			a.call_aligned(check_update_fov_fps);
+			a.mov(qword_ptr(rsp, 0x80), rax);
+			a.popad64();
+			a.pop(rax);
+
+			a.or_(bpl, al);
+			a.test(bpl, bpl);
+			a.jz(no_update);
+
+			a.jmp(SELECT_VALUE(0x149CA83B6, 0x14C116B06, 0x14A602CF6, 0x14BFA5E66));
+
+			a.bind(loop);
+			a.jmp(SELECT_VALUE(0x149CA8377, 0x14C116AC7, 0x14A602CB7, 0x14BFA5E27));
+
+			a.bind(no_update);
+			a.jmp(SELECT_VALUE(0x149CA83BE, 0x14C116B0E, 0x14A602CFE, 0x14BFA5E6E));
+		}
+
+		utils::hook::detour subjective_camera_set_default_hook;
+		void subjective_camera_set_default_stub(void* a1, char a2)
+		{
+			if (var_camera_fp_preserve->current.enabled())
+			{
+				return;
+			}
+
+			subjective_camera_set_default_hook.invoke<void>(a1, a2);
+		}
+
 		void patch_fov()
 		{
 			subjective_camera_set_parameter_hook.create(SELECT_VALUE(0x14105B660, 0x14104C650, 0x14105B6B0, 0x14104BD20), subjective_camera_set_parameter_stub);
 			player_camera_set_tps_params_hook.create(SELECT_VALUE(0x1498447A0, 0x14BE550C0, 0x14A25F300, 0x14BD71D40), player_camera_set_tps_params_stub);
 			player_camera_set_around_params_hook.create(SELECT_VALUE(0x14983F7D0, 0x14BE4EB00, 0x14A25BB10, 0x14BD6C270), player_camera_set_around_params_stub);
+			subjective_camera_set_default_hook.create(SELECT_VALUE(0x149CA3A80, 0x14C111260, 0x14A5EA060, 0x14BFA05F0), subjective_camera_set_default_stub);
 
 			utils::hook::jump(SELECT_VALUE(0x14101E599, 0x141016455, 0x14101E5E9, 0x141015B35), utils::hook::assemble(around_camera_update_parameter_stub), true);
+			utils::hook::jump(SELECT_VALUE(0x149CE7BC0, 0x14C13FBC0, 0x14A6AE6E0, 0x14BFD0A30), utils::hook::assemble(tps_camera_update_parameter_stub), true);
+			utils::hook::jump(SELECT_VALUE(0x149CA83A7, 0x14C116AF7, 0x14A602CE7, 0x14BFA5E57), utils::hook::assemble(subjective_camera_update_parameter_stub), true);
+		}
+
+		void shell_impl_active_shell_at_empty_work_stub(utils::hook::assembler& a)
+		{
+			const auto is_nullptr = a.new_label();
+			const auto continue_ = a.new_label();
+
+			a.mov(eax, 0xFE00);
+			a.test(word_ptr(r13, 0x32), ax);
+			a.mov(rax, r11);
+			a.setnz(al);
+
+			a.test(r14, r14);
+			a.jz(is_nullptr);
+
+			a.mov(eax, word_ptr(r14, rax, 1));
+			a.jmp(continue_);
+
+			a.bind(is_nullptr);
+			a.xor_(rax, rax);
+
+			a.bind(continue_);
+			a.movd(xmm13, eax);
+			a.lea(eax, qword_ptr(rdi, -0x146));
+			a.jmp(SELECT_VALUE_LANG(0x14125F671, 0x14125F091));
+		}
+
+		void sub_1407A7F70_stub(utils::hook::assembler& a)
+		{
+			const auto is_nullptr = a.new_label();
+
+			a.mov(rcx, qword_ptr(rcx, 0x3D0));
+			a.mov(rax, qword_ptr(rcx));
+			a.call(qword_ptr(rax, 0x20));
+
+			a.test(rax, rax);
+			a.jz(is_nullptr);
+			a.jmp(SELECT_VALUE_LANG(0x1407A806D, 0x1407A7A8D));
+
+			a.bind(is_nullptr);
+			a.mov(al, 1);
+			a.jmp(SELECT_VALUE_LANG(0x1407A80DA, 0x1407A7AFA));
+		}
+
+		utils::hook::detour fv2_resource_manager_get_model_hook;
+		void* fv2_resource_manager_get_model_stub(void* a1, void* a2)
+		{
+			if (a1 == nullptr)
+			{
+				return nullptr;
+			}
+
+			return fv2_resource_manager_get_model_hook.invoke<void*>(a1, a2);
+		}
+
+		void patch_mgo_crashes()
+		{
+			utils::hook::jump(SELECT_VALUE_LANG(0x14125F651, 0x14125F071), utils::hook::assemble(shell_impl_active_shell_at_empty_work_stub), true);
+			utils::hook::jump(SELECT_VALUE_LANG(0x1407A8060, 0x1407A7A80), utils::hook::assemble(sub_1407A7F70_stub), true);
+			fv2_resource_manager_get_model_hook.create(SELECT_VALUE_LANG(0x1438AE8D0, 0x1436E73F0), fv2_resource_manager_get_model_stub);
 		}
 	}
 
@@ -289,11 +455,17 @@ namespace patches
 			var_sensitivity = vars::register_float("sensitivity", 1.f, 0.f, 10.f, 
 				vars::var_flag_saved, "mouse sensitivity scale");
 
-			var_camera_fov_scale = vars::register_float("camera_fov_scale", 1.f, 0.1f, 5.f, 
+			var_sensitivity_patch = vars::register_bool("sensitivity_fps_patch", false, 
+				vars::var_flag_saved, "enable sensitivity scaling patch");
+
+			var_camera_fovscale = vars::register_float("camera_fovscale", 1.f, 0.1f, 5.f, 
 				vars::var_flag_saved, "camera fov scale");
 
-			var_camera_fist_person_fov_scale = vars::register_float("camera_first_person_fov_scale", 1.f, 0.1f, 5.f, 
+			var_camera_fp_fovscale = vars::register_float("camera_fp_fovscale", 1.f, 0.1f, 5.f, 
 				vars::var_flag_saved, "first person camera fov scale");
+
+			var_camera_fp_preserve = vars::register_bool("camera_fp_preserve", false, 
+				vars::var_flag_saved, "preserve first person camera mode after leaving ADS");
 
 			if (game::environment::is_tpp())
 			{
@@ -330,6 +502,8 @@ namespace patches
 			{
 				// /AppData 99c85cdbf2c837d50d37c82af2c837d5c12d5e80fbc837d5f2c837d5f2c837d5f2 (command line arg)
 				utils::hook::jump(SELECT_VALUE_LANG(0x143AA8300, 0x143A76D50), sub_143AA8300_stub);
+
+				patch_mgo_crashes();
 			}
 			else
 			{
@@ -358,6 +532,12 @@ namespace patches
 
 			patch_sensitivity();
 			patch_fov();
+
+			command::add("framestats", []()
+			{
+				const auto time_system = game::fox::GetTimeSystem();
+				printf("frametime: %f, fps: %i\n", time_system.frameTime, static_cast<int>(1.f / time_system.frameTime));
+			});
 		}
 	};
 }
