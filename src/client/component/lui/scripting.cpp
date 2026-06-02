@@ -15,6 +15,7 @@
 #include "types/ui_list.hpp"
 #include "types/ui_menu.hpp"
 #include "types/ui_text.hpp"
+#include "types/ui_text_input.hpp"
 #include "types/ui_timer.hpp"
 
 #include <utils/io.hpp>
@@ -99,6 +100,29 @@ namespace lui::scripting
 			}
 		}
 
+		sol::lua_value cast_element(sol::state& state, ui_element& element)
+		{
+			switch (element.get_type())
+			{
+			case UI_TEXT:
+				return {state, dynamic_cast<ui_text*>(&element)};
+			case UI_TEXT_INPUT:
+				return {state, dynamic_cast<ui_text_input*>(&element)};
+			case UI_IMAGE:
+				return {state, dynamic_cast<ui_image*>(&element)};
+			case UI_BUTTON:
+				return {state, dynamic_cast<ui_button*>(&element)};
+			case UI_LIST:
+				return {state, dynamic_cast<ui_list*>(&element)};
+			case UI_MENU:
+				return {state, dynamic_cast<ui_menu*>(&element)};
+			case UI_TIMER:
+				return {state, dynamic_cast<ui_timer*>(&element)};
+			};
+
+			return {state, &element};
+		}
+
 		template <typename T>
 		auto register_base_methods(sol::state& state, T usertype)
 		{
@@ -118,7 +142,10 @@ namespace lui::scripting
 			};
 
 			usertype["removeallchildren"] = &ui_element::remove_all_children;
-			usertype["close"] = &ui_element::close;
+			usertype["close"] = [](ui_element& element)
+			{
+				element.close();
+			};
 
 			usertype["getfirstchild"] = &ui_element::get_first_child;
 			usertype["getlastchild"] = &ui_element::get_last_child;
@@ -126,6 +153,8 @@ namespace lui::scripting
 			usertype["getfirstdescendantbyid"] = &ui_element::get_first_descendant_by_id;
 
 			usertype["sethandlemouse"] = &ui_element::set_handle_mouse;
+			usertype["sethandlemousemove"] = &ui_element::set_handle_mouse_move;
+			usertype["sethandlekeys"] = &ui_element::set_handle_keys;
 			usertype["setmouseblocking"] = &ui_element::set_mouse_blocking;
 			usertype["setneedskeycatcher"] = &ui_element::set_needs_key_catcher;
 			usertype["ismousein"] = &ui_element::is_mouse_in;
@@ -145,8 +174,6 @@ namespace lui::scripting
 
 			usertype["registeranimationstate"] = [](ui_element& element, const std::string& name, const sol::table& state)
 			{
-				element_state_t element_state{};
-
 				element_state_t current_state{};
 				auto has_this_state = false;
 				element.get_animation_state(name, current_state, has_this_state);
@@ -180,6 +207,7 @@ namespace lui::scripting
 				set_flag("rightanchor", ANCHOR_RIGHT);
 				set_flag("bottomanchor", ANCHOR_BOTTOM);
 
+				element_state_t element_state{};
 				element_state.position.anchor = anchor;
 				element_state.position.rect.top = state.get_or("top", current_state.position.rect.top);
 				element_state.position.rect.left = state.get_or("left", current_state.position.rect.left);
@@ -245,64 +273,62 @@ namespace lui::scripting
 				element.set_rect(rect);
 			};
 
-			usertype["registereventhandler"] = [&state](ui_element& element, const std::string& name, const sol::protected_function& function)
+			usertype["registereventhandler"] = [&state](ui_element& element, const std::string& name, const sol::unsafe_function& function)
 			{
 				element.register_event_handler(name, [&state, function](ui_element& element, const event_t& event)
 				{
-					auto event_table = state.create_table();
-
-					event_table["name"] = event.name;
-					for (auto& [k, v] : event)
-					{
-						event_table[k] = convert(state.lua_state(), v);
-					}
-
-					function(element, event_table);
+					function(cast_element(state, element), event);
 				});
 			};
 
-			usertype["dispatchevent"] = [](ui_element& element, const sol::table& event_table)
-			{
-				event_t event{};
-				event.target = element.shared_from_this();
-				auto has_name = false;
-
-				for (auto& [k, v] : event_table)
+			usertype["dispatchevent"] = sol::overload(
+				[](ui_element& element, const event_t& event)
 				{
-					if (!k.is<std::string>())
-					{
-						continue;
-					}
-
-					const auto key_value = k.as<std::string>();
-
-					if (key_value == "name")
-					{
-						event.name = v.as<std::string>();
-						has_name = true;
-					}
-					else if (key_value == "dispatchchildren")
-					{
-						event.dispatch_children = v.as<bool>();
-					}
-					else if (key_value == "immediate")
-					{
-						event.immediate = v.as<bool>();
-					}
-					else
-					{
-						const auto converted = convert(v);
-						event.set(key_value, converted);
-					}
-				}
-
-				if (!has_name)
+					element.dispatch_event(event);
+				},
+				[](ui_element& element, const sol::table& event_table)
 				{
-					throw std::runtime_error("event must have a name");
-				}
+					event_t event{};
+					event.target = element.shared_from_this();
+					auto has_name = false;
 
-				element.dispatch_event(event);
-			};
+					for (auto& [k, v] : event_table)
+					{
+						if (!k.is<std::string>())
+						{
+							continue;
+						}
+
+						const auto key_value = k.as<std::string>();
+
+						if (key_value == "name")
+						{
+							event.name = v.as<std::string>();
+							has_name = true;
+						}
+						else if (key_value == "dispatchchildren")
+						{
+							event.dispatch_children = v.as<bool>();
+						}
+						else if (key_value == "immediate")
+						{
+							event.immediate = v.as<bool>();
+						}
+						else
+						{
+							const auto converted = convert(v);
+							event.params.set(key_value, converted);
+						}
+					}
+
+					if (!has_name)
+					{
+						throw std::runtime_error("event must have a name");
+					}
+
+					element.dispatch_event(event);
+				}
+			);
 
 			return usertype;
 		}
@@ -312,6 +338,11 @@ namespace lui::scripting
 			auto usertype = state.new_usertype<ui_element>("uielement");
 
 			register_base_methods(state, usertype);
+
+			usertype["cast"] = [&state](ui_element& element)
+			{
+				return cast_element(state, element);
+			};
 
 			state["lui"]["uielement"] = state.create_table();
 			state["lui"]["uielement"]["new"] = [&state]()
@@ -338,22 +369,126 @@ namespace lui::scripting
 				return element;
 			};
 
-			usertype["setuv"] = &ui_image::set_uv;
-			usertype["settextureresource"] = &ui_image::set_texture_resource;
-			usertype["setmaterialresource"] = &ui_image::set_material_resource;
+			usertype["setuvcenter"] = sol::overload(
+				[](ui_image& element, const float u, const float v, const std::uint32_t type)
+				{
+					element.set_uv_center(u, v, type);
+				},
+				[](ui_image& element, const float u, const float v)
+				{
+					element.set_uv_center(u, v, TEXTURE_BASE);
+					element.set_uv_center(u, v, TEXTURE_SCREEN);
+					element.set_uv_repeat(u, v, TEXTURE_MASK);
+					element.set_uv_center(u, v, TEXTURE_LAYER);
+				}
+			);
+			
+			usertype["setblend"] = sol::overload(
+				[](ui_image& element, const float blend, const std::uint32_t type)
+				{
+					element.set_blend(blend, type);
+				},
+				[](ui_image& element, const float blend)
+				{
+					element.set_blend(blend, TEXTURE_BASE);
+					element.set_blend(blend, TEXTURE_SCREEN);
+					element.set_blend(blend, TEXTURE_MASK);
+					element.set_blend(blend, TEXTURE_LAYER);
+				}
+			);
 
-			usertype["setmaterial"] = sol::overload(
+			usertype["setuvshift"] = sol::overload(
+				[](ui_image& element, const float u, const float v, const std::uint32_t type)
+				{
+					element.set_uv_shift(u, v, type);
+				},
+				[](ui_image& element, const float u, const float v)
+				{
+					element.set_uv_shift(u, v, TEXTURE_BASE);
+					element.set_uv_shift(u, v, TEXTURE_SCREEN);
+					element.set_uv_shift(u, v, TEXTURE_MASK);
+					element.set_uv_shift(u, v, TEXTURE_LAYER);
+				}
+			);
+
+			usertype["setuvrepeat"] = sol::overload(
+				[](ui_image& element, const float u, const float v, const std::uint32_t type)
+				{
+					element.set_uv_repeat(u, v, type);
+				},
+				[](ui_image& element, const float u, const float v)
+				{
+					element.set_uv_repeat(u, v, TEXTURE_BASE);
+					element.set_uv_repeat(u, v, TEXTURE_SCREEN);
+					element.set_uv_repeat(u, v, TEXTURE_MASK);
+					element.set_uv_repeat(u, v, TEXTURE_LAYER);
+				}
+			);
+			
+			usertype["setshader"] = sol::overload(
 				[](ui_image& element, const std::uint64_t hash)
 				{
-					element.set_material(hash);
+					element.set_shader(hash);
 				},
 				[](ui_image& element, const std::string& path)
 				{
-					element.set_material(path);
+					element.set_shader(path);
+				}
+			);
+
+			usertype["setbasetexture"] = sol::overload(
+				[](ui_image& element, const std::uint64_t hash)
+				{
+					element.set_texture(hash, TEXTURE_BASE);
+				},
+				[](ui_image& element, const std::string& path)
+				{
+					element.set_texture(path, TEXTURE_BASE);
+				}
+			);
+			
+			usertype["setscreentexture"] = sol::overload(
+				[](ui_image& element, const std::uint64_t hash)
+				{
+					element.set_texture(hash, TEXTURE_SCREEN);
+				},
+				[](ui_image& element, const std::string& path)
+				{
+					element.set_texture(path, TEXTURE_SCREEN);
+				}
+			);
+						
+			usertype["setmasktexture"] = sol::overload(
+				[](ui_image& element, const std::uint64_t hash)
+				{
+					element.set_texture(hash, TEXTURE_MASK);
+				},
+				[](ui_image& element, const std::string& path)
+				{
+					element.set_texture(path, TEXTURE_MASK);
+				}
+			);
+						
+			usertype["setlayertexture"] = sol::overload(
+				[](ui_image& element, const std::uint64_t hash)
+				{
+					element.set_texture(hash, TEXTURE_LAYER);
+				},
+				[](ui_image& element, const std::string& path)
+				{
+					element.set_texture(path, TEXTURE_LAYER);
 				}
 			);
 
 			usertype["settexture"] = sol::overload(
+				[](ui_image& element, const std::uint64_t hash, const std::uint32_t type)
+				{
+					element.set_texture(hash, type);
+				},
+				[](ui_image& element, const std::string& path, const std::uint32_t type)
+				{
+					element.set_texture(path, type);
+				},
 				[](ui_image& element, const std::uint64_t hash)
 				{
 					element.set_texture(hash);
@@ -363,6 +498,8 @@ namespace lui::scripting
 					element.set_texture(path);
 				}
 			);
+
+			usertype["setrandomuvshift"] = &ui_image::set_random_uv_shift;
 
 			return usertype;
 		}
@@ -387,6 +524,29 @@ namespace lui::scripting
 			usertype["setusewordwrapping"] = &ui_text::set_use_word_wrapping;
 			usertype["setoutlinecolor"] = &ui_text::set_outline_color;
 			usertype["setfont"] = &ui_text::set_font;
+
+			return usertype;
+		}
+
+		auto register_ui_input_text(sol::state& state)
+		{
+			auto usertype = state.new_usertype<ui_text_input>("uitextinput", sol::base_classes, sol::bases<ui_element>());
+
+			register_base_methods(state, usertype);
+
+			state["lui"]["uitextinput"] = state.create_table();
+			state["lui"]["uitextinput"]["new"] = [&state]()
+			{
+				auto element = ui_text_input::create();
+				element->lua_metadata = state.create_table();
+				return element;
+			};
+
+			usertype["setinput"] = &ui_text_input::set_input;
+			usertype["sethinttext"] = &ui_text_input::set_hint_text;
+			usertype["setcursor"] = &ui_text_input::set_cursor;
+			usertype["setfocused"] = &ui_text_input::set_focused;
+			usertype["clear"] = &ui_text_input::clear;
 
 			return usertype;
 		}
@@ -434,9 +594,9 @@ namespace lui::scripting
 				properties.style = properties_table.get_or("style", BUTTON_STYLE_DEFAULT);
 
 				auto action = properties_table["action"];
-				if (action.is<sol::protected_function>())
+				if (action.is<sol::unsafe_function>())
 				{
-					auto action_cb = action.get<sol::protected_function>();
+					auto action_cb = action.get<sol::unsafe_function>();
 					properties.action = [action_cb]()
 					{
 						action_cb();
@@ -508,37 +668,37 @@ namespace lui::scripting
 				{
 					if (action.is<std::string>())
 					{
-						element.add_button(text, action.as<std::string>());
+						return element.add_button(text, action.as<std::string>());
 					}
-					else if (action.is<sol::protected_function>())
+					else if (action.is<sol::unsafe_function>())
 					{
-						auto action_cb = action.as<sol::protected_function>();
-						element.add_button(text, [action_cb]()
+						auto action_cb = action.as<sol::unsafe_function>();
+						return element.add_button(text, [action_cb]()
 						{
 							action_cb();
 						});
 					}
 					else
 					{
-						element.add_button(text, {});
+						return element.add_button(text, {});
 					}
 				},
 				[](ui_menu& element, const std::string& text, const sol::lua_value& action, const std::string& description)
 				{
 					if (action.is<std::string>())
 					{
-						element.add_button(text, action.as<std::string>(), description);
+						return element.add_button(text, action.as<std::string>(), description);
 					}
-					else if (action.is<sol::protected_function>())
+					else if (action.is<sol::unsafe_function>())
 					{
-						element.add_button(text, [=]()
+						return element.add_button(text, [=]()
 						{
-							action.as<sol::protected_function>();
+							action.as<sol::unsafe_function>();
 						}, description);
 					}
 					else
 					{
-						element.add_button(text, {}, description);
+						return element.add_button(text, {}, description);
 					}
 				}
 			);
@@ -556,6 +716,50 @@ namespace lui::scripting
 
 			state["lui"]["FONT_SYSTEM"] = FONT_SYSTEM;
 			state["lui"]["FONT_ARTIST"] = FONT_ARTIST;
+
+			state["lui"]["TEXTURE_BASE"] = TEXTURE_BASE;
+			state["lui"]["TEXTURE_SCREEN"] = TEXTURE_SCREEN;
+			state["lui"]["TEXTURE_MASK"] = TEXTURE_MASK;
+			state["lui"]["TEXTURE_LAYER"] = TEXTURE_LAYER;
+		}
+
+		void register_structs(sol::state& state)
+		{
+			auto object_usertype = state.new_usertype<object>("object_value");
+
+			object_usertype[sol::meta_function::index] = [&state](const object& object, const std::string& key)
+			{
+				const auto& values = object.get_values();
+				const auto iter = values.find(key);
+				if (iter == values.end())
+				{
+					return sol::lua_value{state, sol::lua_nil};
+				}
+
+				return convert(state.lua_state(), iter->second);
+			};
+
+			object_usertype[sol::meta_function::new_index] = [&state](object& object, const std::string& key, const sol::lua_value& value)
+			{
+				object.set(key, convert(value));
+			};
+
+			object_usertype["new"] = []()
+			{
+				return object();
+			};
+
+			auto event_usertype = state.new_usertype<event_t>("uievent", 
+				"name", &event_t::name, 
+				"immediate", &event_t::immediate,
+				"dispatchchildren", &event_t::dispatch_children,
+				"params", &event_t::params
+			);
+
+			event_usertype["new"] = []()
+			{
+				return event_t();
+			};
 		}
 
 		void register_utility(sol::state& state)
@@ -574,7 +778,6 @@ namespace lui::scripting
 				game::tpp::ui::utility::GetStringId(&str_id, str.data());
 				return game::tpp::ui::utility::GetLangText(str_id);
 			};
-
 
 			state["game"]["getcurrentlocationid"] = []()
 			{
@@ -665,9 +868,12 @@ namespace lui::scripting
 			register_enums(state);
 			register_utility(state);
 
+			register_structs(state);
+
 			register_ui_element(state);
 			register_ui_image(state);
 			register_ui_text(state);
+			register_ui_input_text(state);
 			register_ui_timer(state);
 			register_ui_button(state);
 			register_ui_list(state);
@@ -679,15 +885,15 @@ namespace lui::scripting
 			state["lui"]["flowmanager"]["requestmenu"] = flow_manager::request_menu;
 			state["lui"]["flowmanager"]["requestpopmenu"] = flow_manager::request_pop_menu;
 			state["lui"]["flowmanager"]["requestpopallmenus"] = flow_manager::request_pop_all_menus;
-			state["lui"]["flowmanager"]["registermenu"] = [](const std::string& name, const sol::protected_function& callback)
+			state["lui"]["flowmanager"]["registermenu"] = [](const std::string& name, const sol::unsafe_function& callback)
 			{
 				flow_manager::register_menu(name, [=]()
+					-> ui_element_ptr
 				{
 					const auto result = callback();
-					if (!result.valid())
+					if (!result.valid() || result.return_count() == 0)
 					{
-						const sol::error err = result;
-						throw std::runtime_error(err.what());
+						console::error("LUI: error opening menu \"%s\": not a valid ui element\n", name.data());
 					}
 
 					auto element = result.get<sol::lua_value>(0);
@@ -706,7 +912,8 @@ namespace lui::scripting
 					TRY_TYPE(ui_image);
 					TRY_TYPE(ui_menu);
 
-					throw std::runtime_error("not a valid menu element");
+					console::error("LUI: error opening menu \"%s\": not a valid ui element\n", name.data());
+					return nullptr;
 				});
 			};
 		}

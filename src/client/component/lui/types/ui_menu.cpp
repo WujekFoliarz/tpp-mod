@@ -17,11 +17,14 @@ namespace lui
 	ui_menu::ui_menu()
 	{
 		this->id_ = "uimenu";
+		this->type_ = UI_MENU;
 	}
 
 	ui_menu_ptr ui_menu::create(const std::string& title_text)
 	{
-		auto menu = std::make_shared<ui_menu>();
+		const auto menu = std::make_shared<ui_menu>();
+		menu->track();
+
 		{
 			element_state_t state{};
 			state.position.anchor = ANCHOR_ALL;
@@ -68,12 +71,12 @@ namespace lui
 			list_container->animate_to_state("default");
 		}
 
-		menu->list_ = ui_list::create(2.f);
+		auto list = ui_list::create(2.f);
 		{
 			element_state_t state{};
 			state.position.anchor = ANCHOR_ALL;
-			menu->list_->register_animation_state("default", state);
-			menu->list_->animate_to_state("default");
+			list->register_animation_state("default", state);
+			list->animate_to_state("default");
 		}
 
 		auto title = ui_text::create();
@@ -89,18 +92,22 @@ namespace lui
 			title->set_text(title_text);
 		}
 
-		list_container->add_child(menu->list_);
+		list_container->add_child(list);
+
+		menu->list_ = list;
 
 		menu->add_child(bg);
 		menu->add_child(title);
 		menu->add_child(list_container);
 
+		menu->set_handle_keys(true);
 		menu->set_needs_key_catcher(true);
 
 		utils::play_sound(SOUND_MENU_ENTER);
-		menu->register_event_handler("keydown", [menu](ui_element& element, const event_t& event)
+
+		menu->register_event_handler("keydown", [menu = menu.get()](ui_element& element, const event_t& event)
 		{
-			if (event.get<std::int32_t>("key") != VK_ESCAPE)
+			if (event.params.get<std::int32_t>("key") != VK_ESCAPE)
 			{
 				return;
 			}
@@ -115,7 +122,7 @@ namespace lui
 			flow_manager::request_pop_menu();
 		});
 
-		menu->register_event_handler("restore_menu", [menu](ui_element& element, const event_t& event)
+		menu->register_event_handler("restore_menu", [menu = menu.get()](ui_element& element, const event_t& event)
 		{
 			menu->animate_to_state("hide");
 			menu->animate_to_state("show", 200);
@@ -124,17 +131,14 @@ namespace lui
 		return menu;
 	}
 
-	void ui_menu::add_back_button()
+	void ui_menu::close(bool recurse)
 	{
-		this->add_button("BACK", [this]()
-		{
-			utils::play_sound(SOUND_MENU_LEAVE);
-			this->animate_to_state("hide", 200);
-			this->add_child(ui_timer::create("leave_menu", 200));
-		}, "Go back");
+		this->list_.reset();
+		this->description_.reset();
+		ui_element::close(recurse);
 	}
 
-	void ui_menu::add_description()
+	ui_text_ptr ui_menu::add_description()
 	{
 		auto description_container = ui_element::create();
 		{
@@ -160,7 +164,7 @@ namespace lui
 			description_bg->animate_to_state("default");
 		}
 
-		this->description_ = ui_text::create();
+		auto descrption = ui_text::create();
 		{
 			element_state_t state{};
 			state.position.anchor = ANCHOR_ALL;
@@ -170,19 +174,32 @@ namespace lui
 			state.position.rect.bottom = 6.f;
 			state.height = 20.f;
 
-			this->description_->set_use_stencil(true);
-			this->description_->set_use_word_wrapping(true);
+			descrption->set_use_stencil(true);
+			descrption->set_use_word_wrapping(true);
 
-			this->description_->register_animation_state("default", state);
-			this->description_->animate_to_state("default");
+			descrption->register_animation_state("default", state);
+			descrption->animate_to_state("default");
 		}
 
 		description_container->add_child(description_bg);
-		description_container->add_child(this->description_);
+		description_container->add_child(descrption);
 		this->list_->add_child(description_container);
+		this->description_ = descrption;
+
+		return descrption;
 	}
 
-	void ui_menu::add_button(const std::string& text, const button_action_t& action, const std::string& description)
+	ui_button_ptr ui_menu::add_back_button()
+	{
+		return this->add_button("BACK", [this]()
+		{
+			utils::play_sound(SOUND_MENU_LEAVE);
+			this->animate_to_state("hide", 200);
+			this->add_child(ui_timer::create("leave_menu", 200));
+		}, "Go back");
+	}
+
+	ui_button_ptr ui_menu::add_button(const std::string& text, const button_action_t& action, const std::string& description)
 	{
 		button_properties_t properties{};
 		properties.text = text;
@@ -201,5 +218,7 @@ namespace lui
 		});
 
 		this->list_->add_child(button);
+
+		return button;
 	}
 }

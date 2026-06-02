@@ -10,11 +10,13 @@ namespace lui
 	ui_list::ui_list()
 	{
 		this->id_ = "uilist";
+		this->type_ = UI_LIST;
 	}
 
 	ui_list_ptr ui_list::create(const float spacing)
 	{
 		auto list = std::make_shared<ui_list>();
+		list->track();
 		list->spacing_ = spacing;
 		return list;
 	}
@@ -36,6 +38,13 @@ namespace lui
 	{
 		if (child == this->shared_from_this())
 		{
+			return;
+		}
+
+		if (child->parent_.lock() == this->shared_from_this())
+		{
+			ui_element::remove_child(child);
+			this->update_list();
 			return;
 		}
 

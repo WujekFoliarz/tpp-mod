@@ -16,6 +16,8 @@ namespace game
 
 		WEAK symbol<QuarkSystemTable*()> GetQuarkSystemTable{0x146CDE8D0, 0x148F1D020, 0x148B24E40, 0x148051AD0};
 
+		WEAK symbol<game::fox::StringId(const char*, size_t)> FoxStrHash32{0x140023260, 0x140022F30, 0x140023220, 0x140022FD0};
+
 		namespace AssetConfiguration_
 		{
 			WEAK symbol<SharedString*()> GetLanguage{0x140171180, 0x1401727C0, 0x1401711F0, 0x140172770};
@@ -172,10 +174,26 @@ namespace game
 						/* 49 */ WEAK symbol<void*(Draw2DRenderer*, Packet2DSetTemporaryTexture*)> Execute_Packet2DSetTemporaryTexture{0x1402E4220, 0x140BD6F40, 0x1402E3CC0, 0x140BD6540};
 					}
 				}
-			
+
 				namespace TextureManager_
 				{
-					WEAK symbol<unsigned int(Path*)> CreateResourceFromFile{0x143A8E890, 0x149A96890, 0x140203CF0, 0x148C4CF90};
+					WEAK symbol<ResourceId(Path*)> CreateResourceFromFile{0x143A8E890, 0x149A96890, 0x140203CF0, 0x148C4CF90};
+				}
+
+				namespace DgTextureStreamer_
+				{
+					WEAK symbol<DgTextureStreamer*()> Instance{0x14021DD60, 0x140B23E40, 0x14021DCC0, 0x140B233F0};
+					WEAK symbol<bool(DgTextureStreamer*)> IsEnable{0x14021DE50, 0x140B23F30, 0x14021DDB0, 0x140B234E0};
+					WEAK symbol<bool(DgTextureStreamer*, ResourceId, char)> RequestTextureDetailByDgTexture{0x14021EBF0, 0x149C46A00, 0x14021EB50, 0x140B24230};
+					WEAK symbol<bool(DgTextureStreamer*, ResourceId, char)> UnRequestTextureDetailByDgTexture{0x14021FE10, 0x140B25E60, 0x14021FD70, 0x140B25410};
+				}
+
+				namespace ResourceManagerBase_
+				{
+					namespace TextureResource_
+					{
+						WEAK symbol<void(ResourceId)> DeleteResource{0x1401B7330, 0x1402F6360, 0x1401B7370, 0x1402F62E0};
+					}
 				}
 			}
 
@@ -183,8 +201,9 @@ namespace game
 			{
 				WEAK symbol<Material**(Material**, StringId*)> Create{0x143C372A0, 0x140AB3D30, 0x140276DB0, 0x140AB3340};
 				WEAK symbol<void(Material*, StringId*)> BindShaderTechnique{0x140277150, 0x140AB3B40, 0x140276BC0, 0x140AB3150};
-				WEAK symbol<void(Material*, int, Texture*)> BindTexture{0x140277230, 0x140AB3C20, 0x140276CA0, 0x140AB3230};
-				WEAK symbol<void(Material*, StringId*)> Material_{0x140276DC0, 0x0, 0x0, 0x0};
+				WEAK symbol<void(Material*, unsigned int, Texture*)> BindTexture{0x140277230, 0x140AB3C20, 0x140276CA0, 0x140AB3230};
+				WEAK symbol<void(Material*, unsigned int, Vectormath::Aos::Vector4*)> BindParameter{0x143C34EE0, 0x149919F80, 0x143BABB60, 0x148B53580};
+				WEAK symbol<void(Material*, StringId*)> Material_{0x140276DC0, 0x140AB3620, 0x143BAB490, 0x148B52550};
 			}
 
 			namespace Texture_

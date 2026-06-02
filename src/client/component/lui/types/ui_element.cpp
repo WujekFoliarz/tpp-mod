@@ -5,6 +5,8 @@
 #include "../main.hpp"
 #include "../input.hpp"
 
+#include <utils/string.hpp>
+
 namespace lui
 {
 	std::int32_t get_current_msec()
@@ -18,6 +20,11 @@ namespace lui
 		return x > rect.left && x < rect.right && y > rect.top && y < rect.bottom;
 	}
 
+	event_t::event_t(const std::string& name)
+	{
+		this->name = name;
+	}
+
 	element_state_t::element_state_t()
 	{
 		this->position = {};
@@ -29,9 +36,31 @@ namespace lui
 		this->color.a = 1.f;
 	}
 
+#ifdef DEBUG
+	auto total_elems = 0;
+#endif
+
 	ui_element::ui_element()
 	{
 		this->id_ = "uielement";
+		this->type_ = UI_ELEMENT;
+#ifdef DEBUG
+		console::debug("+ create ui element (%i)\n", ++total_elems);
+#endif
+	}
+
+	ui_element::~ui_element()
+	{
+#ifdef DEBUG
+		console::debug("- delete ui element (%i, %s)\n", --total_elems, this->id_.data());
+#endif
+		this->parent_.reset();
+		this->children_.clear();
+	}
+
+	void ui_element::track()
+	{
+		track_element(this->shared_from_this());
 	}
 
 	void ui_element::draw_internal(const draw_info_t& inherit) const
@@ -61,7 +90,7 @@ namespace lui
 
 	void ui_element::add_child(ui_element_ptr child)
 	{
-		if (child.get() == this)
+		if (child.get() == this || child->get_parent() != nullptr)
 		{
 			return;
 		}
@@ -72,23 +101,38 @@ namespace lui
 
 	void ui_element::remove_child(ui_element_ptr child)
 	{
-		if (child.get() == this)
+		if (child.get() == this || child->parent_.lock() != this->shared_from_this())
 		{
 			return;
 		}
 
 		child->parent_.reset();
-		this->children_.remove(child);
 	}
 
 	void ui_element::remove_all_children()
 	{
-		this->children_.clear();
+		for (auto& child : this->children_)
+		{
+			this->remove_child(child);
+		}
 	}
 
-	void ui_element::close()
+	void ui_element::close(bool recurse)
 	{
+		if (recurse)
+		{
+			for (auto& child : this->children_)
+			{
+				child->close();
+			}
+		}
+
 		this->parent_.reset();
+		this->event_handlers_.clear();
+		this->event_queue_.clear();
+		this->children_.clear();
+		this->metadata = {};
+		this->lua_metadata = {};
 	}
 
 	ui_element_ptr ui_element::get_first_child()
@@ -246,6 +290,10 @@ namespace lui
 		{
 			rect.left += parent_rect.left;
 		}
+		else if ((current_pos.anchor & ANCHOR_RIGHT) != 0)
+		{
+			rect.left = parent_rect.right - current_state.width;
+		}
 
 		if ((current_pos.anchor & ANCHOR_RIGHT) != 0)
 		{
@@ -306,50 +354,56 @@ namespace lui
 
 	bool ui_element::handle_mouse_move_internal(const mouse_move_params_t& params, bool has_target)
 	{
-		if (!this->mouse_state_.handle_mouse)
+		if (this->input_state_.handle_mouse_move)
+		{
+			static event_t event("mousemove");
+
+			event.target = this->shared_from_this();
+			event.immediate = true;
+			event.dispatch_children = false;
+
+			event.params.set("x", params.x);
+			event.params.set("y", params.y);
+			event.params.set("deltax", params.delta_x);
+			event.params.set("deltay", params.delta_y);
+
+			this->dispatch_event(event);
+		}
+
+		if (!this->input_state_.handle_mouse)
 		{
 			return false;
 		}
 
-		const auto was_in = this->mouse_state_.was_mouse_in;
+		const auto was_in = this->input_state_.was_mouse_in;
 		const auto is_in = !has_target && is_in_rect(this->client_rect_, params.x, params.y);
-		this->mouse_state_.was_mouse_in = is_in;
+		this->input_state_.was_mouse_in = is_in;
 
 		if (is_in && !was_in)
 		{
-			event_t event{};
+			static event_t event("mouseenter");
 			event.target = this->shared_from_this();
-			event.name = "mouseenter";
 			event.immediate = true;
+			event.dispatch_children = false;
+
 			this->dispatch_event(event);
 		}
 		else if (!is_in && was_in)
 		{
-			event_t event{};
+			static event_t event("mouseleave");
 			event.target = this->shared_from_this();
-			event.name = "mouseleave";
 			event.immediate = true;
+			event.dispatch_children = false;
+
 			this->dispatch_event(event);
 		}
 
-		{
-			event_t event{};
-			event.target = this->shared_from_this();
-			event.name = "mousemove";
-			event.immediate = true;
-			event.set("x", params.x);
-			event.set("y", params.y);
-			event.set("deltax", params.delta_x);
-			event.set("deltay", params.delta_y);
-			this->dispatch_event(event);
-		}
-
-		return is_in && this->mouse_state_.blocking;
+		return is_in && this->input_state_.blocking;
 	}
 
 	void ui_element::set_mouse_blocking(const bool enabled)
 	{
-		this->mouse_state_.blocking = enabled;
+		this->input_state_.blocking = enabled;
 	}
 
 	void ui_element::handle_mouse_button(const mouse_button_params_t& params)
@@ -365,28 +419,77 @@ namespace lui
 
 	void ui_element::handle_mouse_button_internal(const mouse_button_params_t& params)
 	{
-		if (!this->mouse_state_.handle_mouse)
+		if (!this->input_state_.handle_mouse)
+		{
+			return;
+		}
+
+		if (params.is_down && this->input_state_.was_mouse_in)
+		{
+			static event_t event("mousedown");
+			event.immediate = true;
+			event.name = "mousedown";
+			event.target = this->shared_from_this();
+			event.params.set("button", params.button);
+
+			this->dispatch_event(event);
+			this->input_state_.did_mouse_down = true;
+		}
+		else if (!params.is_down && (this->input_state_.was_mouse_in || this->input_state_.did_mouse_down))
+		{
+			static event_t event("mouseup");
+			event.immediate = true;
+			event.target = this->shared_from_this();
+			event.params.set("button", params.button);
+
+			this->dispatch_event(event);
+			this->input_state_.did_mouse_down = false;
+		}
+	}
+
+	void ui_element::handle_key_event(const key_event_t& params)
+	{
+		for (auto i = this->children_.rbegin(); i != this->children_.rend(); ++i)
+		{
+			i->get()->handle_key_event(params);
+		}
+
+		this->handle_key_event_internal(params);
+	}
+
+	void ui_element::handle_key_event_internal(const key_event_t& params)
+	{
+		if (!this->input_state_.handle_keys)
 		{
 			return;
 		}
 
 		event_t event{};
+		event.target = this->shared_from_this();
 		event.immediate = true;
 		event.dispatch_children = false;
-		event.set("button", params.button);
 
-		if (params.is_down && this->mouse_state_.was_mouse_in)
+		if (params.is_char)
 		{
-			event.name = "mousedown";
-			this->mouse_state_.did_mouse_down = true;
-			this->dispatch_event(event);
+			const auto c = utils::string::normalize_ascii_extended(static_cast<char>(params.key));
+			if (utils::string::is_char_text(c))
+			{
+				event.name = "char";
+				event.params.set("char", c);
+			}
 		}
-		else if (!params.is_down && (this->mouse_state_.was_mouse_in || this->mouse_state_.did_mouse_down))
+		else if (params.is_mousewheel)
 		{
-			event.name = "mouseup";
-			this->mouse_state_.did_mouse_down = false;
-			this->dispatch_event(event);
+			event.name = "mousewheel";
+			event.params.set("down", params.is_down);
 		}
+		else
+		{
+			event.name = params.is_down ? "keydown" : "keyup";
+			event.params.set("key", params.key);
+		}
+
+		this->dispatch_event(event);
 	}
 
 	void ui_element::set_needs_key_catcher(const bool enabled)
@@ -396,22 +499,33 @@ namespace lui
 
 	void ui_element::set_handle_mouse(const bool enabled)
 	{
-		this->mouse_state_.handle_mouse = enabled;
+		this->input_state_.handle_mouse = enabled;
+	}
+
+	void ui_element::set_handle_mouse_move(const bool enabled)
+	{
+		this->input_state_.handle_mouse_move = enabled;
+	}
+
+	void ui_element::set_handle_keys(const bool enabled)
+	{
+		this->input_state_.handle_keys = enabled;
 	}
 
 	bool ui_element::is_mouse_in() const
 	{
-		return this->mouse_state_.was_mouse_in;
+		return this->input_state_.was_mouse_in;
 	}
 
 	bool ui_element::is_mouse_down() const
 	{
-		return this->mouse_state_.did_mouse_down;
+		return this->input_state_.did_mouse_down;
 	}
 
 	void ui_element::make_draggable(const std::optional<ui_element_ptr>& target_opt)
 	{
 		this->set_handle_mouse(true);
+		this->set_handle_mouse_move(true);
 		this->set_needs_key_catcher(true);
 
 		this->register_event_handler("mousemove", [=](ui_element& element, const event_t& event)
@@ -422,8 +536,8 @@ namespace lui
 				return;
 			}
 
-			const auto delta_x = event.get<float>("deltax");
-			const auto delta_y = event.get<float>("deltay");
+			const auto delta_x = event.params.get<float>("deltax");
+			const auto delta_y = event.params.get<float>("deltay");
 
 			rect_t rect{};
 			target->get_rect(rect);
@@ -435,16 +549,15 @@ namespace lui
 
 			target->set_rect(rect);
 
-			event_t next_event = event;
+			static event_t next_event("drag");
 			next_event.target = target;
 			next_event.dispatch_children = false;
 			next_event.immediate = true;
 
-			next_event.name = "drag";
-			next_event.set("left", rect.left);
-			next_event.set("top", rect.top);
-			next_event.set("right", rect.right);
-			next_event.set("bottom", rect.bottom);
+			next_event.params.set("left", rect.left);
+			next_event.params.set("top", rect.top);
+			next_event.params.set("right", rect.right);
+			next_event.params.set("bottom", rect.bottom);
 
 			target->dispatch_event(next_event);
 		});
@@ -471,7 +584,7 @@ namespace lui
 
 	void ui_element::dispatch_event(const std::string& name, bool immediate, bool dispatch_children)
 	{
-		event_t event{};
+		static event_t event{};
 		event.target = this->shared_from_this();
 		event.name = name;
 		event.immediate = immediate;
@@ -489,7 +602,8 @@ namespace lui
 
 		try
 		{
-			handler->second.operator()(*event.target, event);
+			auto target = event.target.lock();
+			handler->second.operator()(*target, event);
 		}
 		catch (const std::exception& e)
 		{
@@ -569,8 +683,15 @@ namespace lui
 		state = this->animation_state_.end_state;
 	}
 
+	ui_element_type_t ui_element::get_type() const
+	{
+		return this->type_;
+	}
+
 	ui_element_ptr ui_element::create()
 	{
-		return std::make_shared<ui_element>();
+		const auto element = std::make_shared<ui_element>();
+		element->track();
+		return element;
 	}
 }
