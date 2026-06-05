@@ -823,7 +823,7 @@ namespace fobs
 			var_fob_security_challenge_mode = vars::register_int("fob_security_challenge_mode", 0, 0, 2,
 				vars::var_flag_saved, "security challenge mode (0 = konami, 1 = steam lobbies, 2 = alive fobs)");
 
-			var_alive_fobs_server_http_url = vars::register_string("var_alive_fobs_server_http_url", "http://maluch.mikr.us:40099/", vars::var_flag_saved, "Server of alive fob tab");
+			var_alive_fobs_server_http_url = vars::register_string("var_alive_fobs_server_http_url", "http://alivefobs.toadres.pl/", vars::var_flag_saved, "Server of alive fob tab");
 
 			var_send_player_ids_to_whopener = vars::register_int("fob_send_player_ids_to_whopener", 0, 0, 1, vars::var_flag_saved, "sends player ids automatically to whopener website, you need to be whitelisted");
 		}
