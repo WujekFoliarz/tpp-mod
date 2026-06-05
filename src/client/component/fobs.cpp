@@ -670,7 +670,7 @@ namespace fobs
 						}
 
 						const std::string& text = *response_value;
-						std::cout << text << std::endl;
+
 						if (!nlohmann::json::accept(text))
 						{
 							console::error("[fobs] Failed to parse alive fobs");
