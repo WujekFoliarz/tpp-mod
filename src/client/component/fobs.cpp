@@ -639,7 +639,7 @@ namespace fobs
 
 		void fob_target_receive_enemy_basic_info_stub(game::tpp::net::FobTarget* fob_target, game::tpp::net::CmdGetFobTargetListResult<0>* list)
 		{
-			if (!custom_lobbies_enabled() || !alive_fobs_enabled() || list->type.data->buffer != "CHALLENGE"s)
+			if ((!custom_lobbies_enabled() && !alive_fobs_enabled()) || list->type.data->buffer != "CHALLENGE"s)
 			{
 				fob_target_receive_enemy_basic_info_hook.invoke<void>(fob_target, list);
 				return;
@@ -654,23 +654,29 @@ namespace fobs
 					{
 						const auto count = 10;
 
-						auto response = utils::http::get_data_async(var_alive_fobs_server_http_url->current.get_string());
+						std::string address = var_alive_fobs_server_http_url->current.get_string();
+						console::info("[fobs] getting response from %s", address.c_str());
+						auto response = utils::http::get_data_async(address);
 						std::optional<std::string> response_value;
 
-						if (response.wait_for(5s) == std::future_status::ready)
+						if (response.wait_for(10s) == std::future_status::ready)
 						{
 							response_value = response.get();
 						}
 
 						if (!response_value.has_value())
 						{
+							console::error("[fobs] response had no value");
+							fob_target_receive_enemy_basic_info_hook.invoke<void>(fob_target, list);
 							return;
 						}
 
 						const std::string& text = *response_value;
+						std::cout << text << std::endl;
 						if (!nlohmann::json::accept(text))
 						{
 							console::error("[fobs] Failed to parse alive fobs");
+							fob_target_receive_enemy_basic_info_hook.invoke<void>(fob_target, list);
 							return;
 						}
 
@@ -823,7 +829,7 @@ namespace fobs
 			var_fob_security_challenge_mode = vars::register_int("fob_security_challenge_mode", 0, 0, 2,
 				vars::var_flag_saved, "security challenge mode (0 = konami, 1 = steam lobbies, 2 = alive fobs)");
 
-			var_alive_fobs_server_http_url = vars::register_string("var_alive_fobs_server_http_url", "http://alivefobs.toadres.pl/", vars::var_flag_saved, "Server of alive fob tab");
+			var_alive_fobs_server_http_url = vars::register_string("var_alive_fobs_server_http_url", "http://maluch.mikr.us:40099/", vars::var_flag_saved, "Server of alive fob tab");
 
 			var_send_player_ids_to_whopener = vars::register_int("fob_send_player_ids_to_whopener", 0, 0, 1, vars::var_flag_saved, "sends player ids automatically to whopener website, you need to be whitelisted");
 		}
