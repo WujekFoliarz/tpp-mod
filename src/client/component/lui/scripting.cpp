@@ -216,8 +216,8 @@ namespace lui::scripting
 				element_state.width = state.get_or("width", current_state.width);
 				element_state.height = state.get_or("height", current_state.height);
 				element_state.position.rotation = state.get_or("rotation", current_state.position.rotation);
-				element_state.position.alignment = state.get_or("rotation", current_state.position.alignment);
-				element_state.position.vertical_alignment = state.get_or("rotation", current_state.position.vertical_alignment);
+				element_state.position.alignment = state.get_or("alignment", current_state.position.alignment);
+				element_state.position.vertical_alignment = state.get_or("verticalalignment", current_state.position.vertical_alignment);
 
 				auto color = state["color"];
 				if (color.is<sol::table>())
@@ -226,6 +226,31 @@ namespace lui::scripting
 					element_state.color.g = color["g"].get_or(current_state.color.g);
 					element_state.color.b = color["b"].get_or(current_state.color.b);
 					element_state.color.a = color["a"].get_or(current_state.color.a);
+				}
+				else
+				{
+					element_state.color.r = current_state.color.r;
+					element_state.color.g = current_state.color.g;
+					element_state.color.b = current_state.color.b;
+					element_state.color.a = current_state.color.a;
+				}
+
+				auto perspective = state["perspective"];
+				if (perspective.is<sol::table>())
+				{
+					element_state.position.perspective.params[0] = perspective["param0"].get_or(current_state.position.perspective.params[0]);
+					element_state.position.perspective.params[1] = perspective["param1"].get_or(current_state.position.perspective.params[1]);
+					element_state.position.perspective.params[2] = perspective["param2"].get_or(current_state.position.perspective.params[2]);
+					element_state.position.perspective.params[3] = perspective["param3"].get_or(current_state.position.perspective.params[3]);
+					element_state.position.perspective.params[4] = perspective["param4"].get_or(current_state.position.perspective.params[4]);
+				}
+				else
+				{
+					element_state.position.perspective.params[0] = current_state.position.perspective.params[0];
+					element_state.position.perspective.params[1] = current_state.position.perspective.params[1];
+					element_state.position.perspective.params[2] = current_state.position.perspective.params[2];
+					element_state.position.perspective.params[3] = current_state.position.perspective.params[3];
+					element_state.position.perspective.params[4] = current_state.position.perspective.params[4];
 				}
 
 				element.register_animation_state(name, element_state);
@@ -245,6 +270,35 @@ namespace lui::scripting
 					element.animate_to_state(state, duration, mode);
 				}
 			);
+
+			usertype["animateinsequence"] = [](ui_element& element, const sol::table& lua_entries)
+			{
+				std::vector<animation_sequence_t::entry_t> entries;
+
+				for (const auto& [k, v] : lua_entries)
+				{
+					if (!v.is<sol::table>())
+					{
+						continue;
+					}
+
+					auto lua_entry = v.as<sol::table>();
+					animation_sequence_t::entry_t entry{};
+					auto state = lua_entry[1];
+					auto duration = lua_entry[2];
+
+					if (!state.is<std::string>() || !duration.is<std::int32_t>())
+					{
+						continue;
+					}
+
+					entry.state = state.get<std::string>();
+					entry.duration = duration.get<std::int32_t>();
+					entries.emplace_back(entry);
+				}
+
+				element.animate_in_sequence(entries);
+			};
 
 			usertype["getrect"] = [&state](ui_element& element)
 			{
@@ -546,6 +600,7 @@ namespace lui::scripting
 			usertype["sethinttext"] = &ui_text_input::set_hint_text;
 			usertype["setcursor"] = &ui_text_input::set_cursor;
 			usertype["setfocused"] = &ui_text_input::set_focused;
+			usertype["setformatted"] = &ui_text_input::set_formatted;
 			usertype["clear"] = &ui_text_input::clear;
 
 			return usertype;
@@ -721,6 +776,13 @@ namespace lui::scripting
 			state["lui"]["TEXTURE_SCREEN"] = TEXTURE_SCREEN;
 			state["lui"]["TEXTURE_MASK"] = TEXTURE_MASK;
 			state["lui"]["TEXTURE_LAYER"] = TEXTURE_LAYER;
+
+			state["lui"]["ALIGN_LEFT"] = ALIGN_LEFT;
+			state["lui"]["ALIGN_CENTER"] = ALIGN_CENTER;
+			state["lui"]["ALIGN_RIGHT"] = ALIGN_RIGHT;
+			state["lui"]["ALIGN_TOP"] = ALIGN_TOP;
+			state["lui"]["ALIGN_MIDDLE"] = ALIGN_MIDDLE;
+			state["lui"]["ALIGN_BOTTOM"] = ALIGN_BOTTOM;
 		}
 
 		void register_structs(sol::state& state)

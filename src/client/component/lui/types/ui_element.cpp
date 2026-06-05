@@ -28,6 +28,11 @@ namespace lui
 	element_state_t::element_state_t()
 	{
 		this->position = {};
+		this->position.perspective.params[0] = 1.f;
+		this->position.perspective.params[1] = 0.f;
+		this->position.perspective.params[2] = 0.f;
+		this->position.perspective.params[3] = 0.f;
+		this->position.perspective.params[4] = 0.f;
 		this->width = 0.f;
 		this->height = 0.f;
 		this->color.r = 1.f;
@@ -75,6 +80,17 @@ namespace lui
 		draw_info_t draw_info{};
 		draw_info.alpha = this->animation_state_.current_state.color.a * parent_draw_info.alpha;
 		draw_info.rotation = this->animation_state_.current_state.position.rotation + parent_draw_info.rotation;
+
+		draw_info.perspective.params[0] = this->animation_state_.current_state.position.perspective.params[0] * parent_draw_info.perspective.params[0];
+		draw_info.perspective.params[1] = this->animation_state_.current_state.position.perspective.params[1] + parent_draw_info.perspective.params[1];
+		draw_info.perspective.params[2] = this->animation_state_.current_state.position.perspective.params[2] + parent_draw_info.perspective.params[2];
+		draw_info.perspective.params[3] = this->animation_state_.current_state.position.perspective.params[3] + parent_draw_info.perspective.params[3];
+		draw_info.perspective.params[4] = this->animation_state_.current_state.position.perspective.params[4] + parent_draw_info.perspective.params[4];
+
+		if (draw_info.perspective.params[0] < 0.f)
+		{
+			draw_info.perspective.params[0] = 1.f;
+		}
 
 		this->calculate_rect(parent_draw_info.rect, draw_info.rect);
 		this->client_rect_ = draw_info.rect;
@@ -188,14 +204,19 @@ namespace lui
 			return;
 		}
 
+		this->animation_sequence_ = {};
+		this->animate_to_state_internal(iter->second, duration, mode);
+		this->update_animation_state();
+	}
+
+	void ui_element::animate_to_state_internal(const element_state_t& state, const std::int32_t duration, const std::uint32_t mode)
+	{
 		this->animation_state_.start_state = this->animation_state_.current_state;
-		this->animation_state_.end_state = iter->second;
+		this->animation_state_.end_state = state;
 
 		this->animation_state_.begin = get_current_msec();
 		this->animation_state_.duration = duration;
 		this->animation_state_.mode = mode;
-
-		this->update_animation_state();
 	}
 
 	void ui_element::update()
@@ -252,6 +273,11 @@ namespace lui
 		GET_SAMPLE(position.rect.right);
 		GET_SAMPLE(position.rect.bottom);
 		GET_SAMPLE(position.rotation);
+		GET_SAMPLE(position.perspective.params[0]);
+		GET_SAMPLE(position.perspective.params[1]);
+		GET_SAMPLE(position.perspective.params[2]);
+		GET_SAMPLE(position.perspective.params[3]);
+		GET_SAMPLE(position.perspective.params[4]);
 		GET_SAMPLE(width);
 		GET_SAMPLE(height);
 
@@ -267,6 +293,46 @@ namespace lui
 			this->animation_state_.current_state.position.alignment = this->animation_state_.start_state.position.alignment;
 			this->animation_state_.current_state.position.vertical_alignment = this->animation_state_.start_state.position.vertical_alignment;
 		}
+
+		if (percent >= 1.f)
+		{
+			this->advance_animation_sequence();
+		}
+	}
+
+	void ui_element::animate_in_sequence(const std::vector<animation_sequence_t::entry_t>& entries)
+	{
+		this->animation_sequence_ = {};
+
+		for (auto& entry : entries)
+		{
+			animation_sequence_t::parsed_entry_t parsed_entry{};
+			const auto iter = this->states_.find(entry.state);
+			if (iter == this->states_.end())
+			{
+				continue;
+			}
+
+			parsed_entry.state = &iter->second;
+			parsed_entry.duration = entry.duration;
+			this->animation_sequence_.entries.emplace_back(parsed_entry);
+		}
+
+		this->animation_sequence_.current_entry = -1;
+		this->advance_animation_sequence();
+	}
+
+	void ui_element::advance_animation_sequence()
+	{
+		if (this->animation_sequence_.entries.empty())
+		{
+			return;
+		}
+
+		const auto next_index = (this->animation_sequence_.current_entry + 1) % this->animation_sequence_.entries.size();
+		this->animation_sequence_.current_entry = next_index;
+		const auto& entry = this->animation_sequence_.entries[next_index];
+		this->animate_to_state_internal(*entry.state, entry.duration, ANIMATE_NORMAL);
 	}
 
 	void ui_element::calculate_rect(const rect_t& parent_rect, rect_t& rect) const

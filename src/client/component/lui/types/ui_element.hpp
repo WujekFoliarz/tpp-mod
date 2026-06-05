@@ -47,12 +47,18 @@ namespace lui
 		float bottom;
 	};
 
+	struct perspective_t
+	{
+		float params[5];
+	};
+
 	struct position_t
 	{
 		std::uint32_t anchor;
 		std::uint32_t alignment;
 		std::uint32_t vertical_alignment;
 		rect_t rect;
+		perspective_t perspective;
 		float rotation;
 	};
 
@@ -77,6 +83,7 @@ namespace lui
 	struct draw_info_t
 	{
 		rect_t rect;
+		perspective_t perspective;
 		float alpha;
 		float rotation;
 	};
@@ -89,6 +96,24 @@ namespace lui
 		std::int32_t begin{};
 		std::int32_t duration{};
 		std::uint32_t mode{};
+	};
+
+	struct animation_sequence_t
+	{
+		struct parsed_entry_t
+		{
+			element_state_t* state;
+			std::int32_t duration;
+		};
+
+		struct entry_t
+		{
+			std::string state;
+			std::int32_t duration;
+		};
+
+		std::vector<parsed_entry_t> entries;
+		std::int64_t current_entry;
 	};
 
 	struct mouse_move_params_t
@@ -189,6 +214,7 @@ namespace lui
 
 		void register_animation_state(const std::string& name, const element_state_t& state);
 		void animate_to_state(const std::string& name, const std::int32_t duration = 0, const std::uint32_t = ANIMATE_NORMAL);
+		void animate_in_sequence(const std::vector<animation_sequence_t::entry_t>& entries);
 
 		void get_rect(rect_t& rect);
 		void get_client_rect(rect_t& rect);
@@ -233,6 +259,9 @@ namespace lui
 	private:
 		virtual void update();
 		void update_animation_state();
+		void advance_animation_sequence();
+		void animate_to_state_internal(const element_state_t& state, const std::int32_t duration, const std::uint32_t mode);
+
 		virtual void draw_internal(const draw_info_t& inherit) const;
 		void calculate_rect(const rect_t& parent_rect, rect_t& rect) const;
 		void delete_removed_children();
@@ -252,6 +281,7 @@ namespace lui
 		std::vector<event_t> event_queue_{};
 
 		animation_state_t animation_state_{};
+		animation_sequence_t animation_sequence_{};
 		input_state_t input_state_{};
 		rect_t client_rect_{};
 		bool needs_key_catcher_{};
