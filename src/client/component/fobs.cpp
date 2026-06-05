@@ -651,9 +651,7 @@ namespace fobs
 			state.access([&](state_t& s)
 				{
 					if (alive_fobs_enabled())
-					{
-						const auto count = 10;
-
+					{				
 						std::string address = var_alive_fobs_server_http_url->current.get_string();
 						console::info("[fobs] getting response from %s", address.c_str());
 						auto response = utils::http::get_data_async(address);
@@ -681,6 +679,7 @@ namespace fobs
 						}
 
 						nlohmann::json response_json = nlohmann::json::parse(text);
+						const auto count = std::min<size_t>(10, response_json.size());
 
 						for (auto i = 0; i < count; i++)
 						{
