@@ -12,6 +12,8 @@ namespace troll
 {
     namespace
     {
+        vars::var_ptr var_replace_pickup_high_with_follow;
+
         // Any FOB attack cheat
         utils::hook::detour getfriendbyindex_hook;
         game::ISteamFriends_vtbl steam_friends_vtbl{};
@@ -73,6 +75,7 @@ namespace troll
 
             utils::hook::copy(addr, "", 12);
             utils::hook::copy(addr, "FOLLOW", 6);
+            console::info("[troll] Replaced PICKUP_HIGH with FOLLOW");
         }
 
 #if 0
@@ -144,7 +147,8 @@ namespace troll
             {
                 if (!game::environment::is_tpp()) return;
 
-                replace_pickup_high_with_follow();
+                var_replace_pickup_high_with_follow = vars::register_int("var_replace_pickup_high_with_follow", 0, 0, 1, vars::var_flag_saved, "Replaces PICKUP_HIGH with FOLLOW on startup");
+                
 #if 0
                 cmd_open_wormhole_option_pack_hook.create(SELECT_VALUE(0x145B2F090, 0x0, 0x0, 0x0), cmd_open_wormhole_option_pack_stub);
                 cmd_sneak_mother_base_hook.create(SELECT_VALUE(0x145B1FFE0, 0x0, 0x0, 0x0), cmd_sneak_mother_base_stub);
@@ -157,6 +161,11 @@ namespace troll
             void start() override
             {
                 if (!game::environment::is_tpp()) return;
+
+                if (var_replace_pickup_high_with_follow->current.get_int() == 1)
+                {
+                    replace_pickup_high_with_follow();
+                }
 
                 scheduler::once([]()
                 {
