@@ -410,6 +410,9 @@ namespace fobs
 			return cmd_get_fob_target_list_option_pack_hook.invoke<char>(option);
 		}
 
+		static std::mutex alive_fob_result_lock;
+		static std::string alive_fob_result = "";
+		static std::atomic<bool> alive_fob_result_success = false;
 		char cmd_get_fob_target_list_result_unpack_stub(game::tpp::net::CmdGetFobTargetListResult<16>* list)
 		{
 			const auto res = cmd_get_fob_target_list_result_unpack_hook.invoke<char>(list);
@@ -425,6 +428,32 @@ namespace fobs
 				{
 					wait_for_lobby_list();
 				}
+			}
+
+			if (alive_fobs_enabled() && list->type.data->buffer == "CHALLENGE"s)
+			{
+				std::string address = var_alive_fobs_server_http_url->current.get_string();
+				console::info("[fobs] getting response from %s", address.c_str());
+				auto response = utils::http::get_data_async(address);
+				std::optional<std::string> response_value;
+
+				if (response.wait_for(10s) == std::future_status::ready)
+				{
+					response_value = response.get();
+				}
+
+				if (!response_value.has_value())
+				{
+					console::error("[fobs] response had no value");
+					alive_fob_result_success = false;
+				}
+				else
+				{
+					std::lock_guard<std::mutex> lock(alive_fob_result_lock);
+					alive_fob_result = *response_value;
+					alive_fob_result_success = true;
+				}
+
 			}
 
 			if (should_send_to_website() && list->type.data->buffer != "EVENT"s)
@@ -650,26 +679,15 @@ namespace fobs
 
 			state.access([&](state_t& s)
 				{
-					if (alive_fobs_enabled())
+					if (alive_fobs_enabled() && alive_fob_result_success)
 					{				
-						std::string address = var_alive_fobs_server_http_url->current.get_string();
-						console::info("[fobs] getting response from %s", address.c_str());
-						auto response = utils::http::get_data_async(address);
-						std::optional<std::string> response_value;
+						alive_fob_result_success = false;
+						std::string text = "";
 
-						if (response.wait_for(10s) == std::future_status::ready)
 						{
-							response_value = response.get();
+							std::lock_guard<std::mutex> lock(alive_fob_result_lock);
+							text = alive_fob_result;
 						}
-
-						if (!response_value.has_value())
-						{
-							console::error("[fobs] response had no value");
-							fob_target_receive_enemy_basic_info_hook.invoke<void>(fob_target, list);
-							return;
-						}
-
-						const std::string& text = *response_value;
 
 						if (!nlohmann::json::accept(text))
 						{
@@ -830,7 +848,7 @@ namespace fobs
 
 			var_alive_fobs_server_http_url = vars::register_string("var_alive_fobs_server_http_url", "http://maluch.mikr.us:40099/", vars::var_flag_saved, "Server of alive fob tab");
 
-			var_send_player_ids_to_whopener = vars::register_int("fob_send_player_ids_to_whopener", 0, 0, 1, vars::var_flag_saved, "sends player ids automatically to whopener website, you need to be whitelisted");
+			var_send_player_ids_to_whopener = vars::register_int("fob_send_player_ids_to_whopener", 0, 0, 1, vars::var_flag_saved, "Sends player ids automatically to whopener website, you need to be whitelisted");
 		}
 
 		void start() override
