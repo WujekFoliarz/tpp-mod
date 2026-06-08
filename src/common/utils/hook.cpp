@@ -124,9 +124,10 @@ namespace utils::hook
 		this->clear();
 		this->place_ = place;
 
-		if (MH_CreateHook(this->place_, target, &this->original_) != MH_OK)
+		auto result = MH_CreateHook(this->place_, target, &this->original_);
+		if (result != MH_OK)
 		{
-			throw std::runtime_error(string::va("Unable to create hook at location: %p", this->place_));
+			throw std::runtime_error(string::va("Unable to create hook at location: %p\nCode: %d", this->place_, result));
 		}
 
 		this->enable();

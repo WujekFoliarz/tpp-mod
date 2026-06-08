@@ -25,6 +25,7 @@
 #pragma warning(disable: 26495)
 #pragma warning(disable: 26498)
 #pragma warning(disable: 26812)
+#pragma warning(disable: 26819)
 #pragma warning(disable: 28020)
 
 #define WIN32_LEAN_AND_MEAN

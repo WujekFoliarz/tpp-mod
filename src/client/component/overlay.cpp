@@ -12,6 +12,7 @@
 #include <utils/hook.hpp>
 #include <utils/memory.hpp>
 #include <utils/string.hpp>
+#include "console.hpp"
 
 namespace overlay
 {
@@ -20,12 +21,12 @@ namespace overlay
 		vars::var_ptr var_ui_draw_fps;
 		vars::var_ptr var_ui_draw_ping;
 
-		float color_good[4] = {0.6f, 1.0f, 0.0f, 1.0f};
-		float color_ok[4] = {1.0f, 0.7f, 0.3f, 1.0f};
-		float color_bad[4] = {1.0f, 0.3f, 0.3f, 1.0f};
-		float color_outline[4] = {0.f, 0.f, 0.f, 1.f};
-		float color_text[4] = {1.f, 1.f, 1.f, 1.f};
-		float color_bg[4] = {0.f, 0.f, 0.f, 0.5f};
+		float color_good[4] = { 0.6f, 1.0f, 0.0f, 1.0f };
+		float color_ok[4] = { 1.0f, 0.7f, 0.3f, 1.0f };
+		float color_bad[4] = { 1.0f, 0.3f, 0.3f, 1.0f };
+		float color_outline[4] = { 0.f, 0.f, 0.f, 1.f };
+		float color_text[4] = { 1.f, 1.f, 1.f, 1.f };
+		float color_bg[4] = { 0.f, 0.f, 0.f, 0.5f };
 
 		struct cg_perf_data
 		{
@@ -261,6 +262,7 @@ namespace overlay
 				{
 					offset_x -= margin;
 				}
+
 				renderer::draw_text(instance, "ping:", font_size, offset_x, text_y, color_text, color_outline);
 				renderer::draw_text(instance, ping_text, font_size, offset_x + ping_label_width, text_y, ping_color, color_outline);
 			}

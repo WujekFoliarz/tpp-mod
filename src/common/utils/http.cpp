@@ -90,6 +90,7 @@ namespace utils::http
 		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progress_callback);
 		curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &helper);
 		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
+		curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
 		if (curl_easy_perform(curl) == CURLE_OK)
 		{
@@ -110,5 +111,80 @@ namespace utils::http
 		{
 			return get_data(url, headers);
 		});
+	}
+
+	std::optional<std::string> post_data(
+		const std::string& url,
+		const headers& headers,
+		const std::string& post_data,
+		const std::function<void(size_t, size_t, size_t)>& callback)
+	{
+		curl_slist* header_list = nullptr;
+
+		auto* curl = curl_easy_init();
+		if (!curl)
+		{
+			return {};
+		}
+
+		auto _ = gsl::finally([&]()
+			{
+				curl_slist_free_all(header_list);
+				curl_easy_cleanup(curl);
+			});
+
+		for (const auto& header : headers)
+		{
+			auto data = header.first + ": " + header.second;
+			header_list = curl_slist_append(header_list, data.c_str());
+		}
+
+		std::string buffer{};
+
+		progress_helper helper{};
+		helper.callback = &callback;
+		helper.start = std::chrono::high_resolution_clock::now();
+
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+		curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L); 
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);       
+
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
+
+		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progress_callback);
+		curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &helper);
+		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+
+		// POST
+		curl_easy_setopt(curl, CURLOPT_POST, 1L);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, post_data.c_str());
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, post_data.size());
+
+		if (curl_easy_perform(curl) == CURLE_OK)
+		{
+			return { std::move(buffer) };
+		}
+
+		if (helper.exception)
+		{
+			std::rethrow_exception(helper.exception);
+		}
+
+		return {};
+	}
+
+	std::future<std::optional<std::string>> post_data_async(
+		const std::string& url,
+		const headers& headers,
+		const std::string& body)
+	{
+		return std::async(std::launch::async,
+			[url, headers, body]()
+			{
+				return post_data(url, headers, body, {});
+			});
 	}
 }
