@@ -700,6 +700,13 @@ namespace fobs
 						{
 							const auto& curPlayer = response_json[i];
 
+							if (!curPlayer)
+							{
+								console::error("[fobs] curPlayer is null");
+								fob_target_receive_enemy_basic_info_hook.invoke<void>(fob_target, list);
+								return;
+							}
+
 							fob_target->playerInfos[i].owner_account.id = static_cast<long long>(curPlayer["xuid"]);
 							fob_target->playerInfos[i].owner_player_id = curPlayer["player_id"];
 
@@ -841,7 +848,7 @@ namespace fobs
 				return;
 			}
 
-			if (custom_lobbies_enabled())
+			if (custom_lobbies_enabled() || alive_fobs_enabled())
 			{
 				receive_custom_challenge_list(fob_target, list);
 				return;
@@ -959,9 +966,6 @@ namespace fobs
 			{
 				return;
 			}
-
-			var_fob_security_challenge_mode = vars::register_int("fob_security_challenge_mode", 0, 0, 1,
-				vars::var_flag_saved, "security challenge mode (0 = konami, 1 = steam lobbies)");
 
 			var_fob_security_challenge_min_level = vars::register_int("fob_security_challenge_min_level", 0, 0, 99,
 				vars::var_flag_saved, "filter out fobs with security level < (value)");
