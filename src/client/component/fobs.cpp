@@ -700,13 +700,6 @@ namespace fobs
 						{
 							const auto& curPlayer = response_json[i];
 
-							if (!curPlayer)
-							{
-								console::error("[fobs] curPlayer is null");
-								fob_target_receive_enemy_basic_info_hook.invoke<void>(fob_target, list);
-								return;
-							}
-
 							fob_target->playerInfos[i].owner_account.id = static_cast<long long>(curPlayer["xuid"]);
 							fob_target->playerInfos[i].owner_player_id = curPlayer["player_id"];
 
