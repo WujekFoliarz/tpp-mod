@@ -197,9 +197,9 @@ namespace custom_server
 			if (game::environment::is_tpp())
 			{
 				file_read_hook.create(SELECT_VALUE_LANG(0x143593E20, 0x14357A1A0), file_read_stub);
-				file_write_hook.create(SELECT_VALUE_LANG(0x143596770, 0x14357B660), file_write_stub);
+				file_write_hook.create(SELECT_VALUE_LANG(0x1401703c0, 0x14357B660), file_write_stub);
 
-				utils::hook::set(SELECT_VALUE_LANG(0x14DB4F0B8, 0x14E1300B8), create_file_stub);
+				utils::hook::set(SELECT_VALUE_LANG(0x14208D260, 0x14E1300B8), create_file_stub);
 
 				const auto folder = get_custom_server_data_folder();
 				utils::io::write_file(std::format("{}\\server_url.txt", folder), custom_url);

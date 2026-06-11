@@ -113,8 +113,8 @@ namespace server_logging
 
 		void start() override
 		{
-			http_codec_begin_encode_hook.create(SELECT_VALUE(0x14D343690, 0x14A4E7640, 0x14D88F960, 0x1494F5CD0), http_codec_begin_encode_stub);
-			http_codec_end_decode_hook.create(SELECT_VALUE(0x141CE3210, 0x140C42A20, 0x141CE3090, 0x140C42520), http_codec_end_decode_stub);
+			http_codec_begin_encode_hook.create(SELECT_VALUE(0x141CE2DC0, 0x14A4E7640, 0x14D88F960, 0x1494F5CD0), http_codec_begin_encode_stub);
+			http_codec_end_decode_hook.create(SELECT_VALUE(0x141CE35E0, 0x140C42A20, 0x141CE3090, 0x140C42520), http_codec_end_decode_stub);
 
 			utils::hook::far_jump<BASE_ADDRESS>(SELECT_VALUE(0x1407DF0C8, 0x14057D1B8, 0x1407DED08, 0x14057CB88), utils::hook::assemble(session_daemon_update_stub));
 			utils::hook::call(SELECT_VALUE(0x1407D1A76, 0x144DA6856, 0x1407D16B6, 0x14651E946), net_daemon_set_heartbeat);

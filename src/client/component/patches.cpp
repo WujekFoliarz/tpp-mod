@@ -360,13 +360,13 @@ namespace patches
 
 		void patch_fov()
 		{
-			subjective_camera_set_parameter_hook.create(SELECT_VALUE(0x14105B660, 0x14104C650, 0x14105B6B0, 0x14104BD20), subjective_camera_set_parameter_stub);
-			player_camera_set_tps_params_hook.create(SELECT_VALUE(0x1498447A0, 0x14BE550C0, 0x14A25F300, 0x14BD71D40), player_camera_set_tps_params_stub);
-			player_camera_set_around_params_hook.create(SELECT_VALUE(0x14983F7D0, 0x14BE4EB00, 0x14A25BB10, 0x14BD6C270), player_camera_set_around_params_stub);
+			subjective_camera_set_parameter_hook.create(SELECT_VALUE(0x14105AE20, 0x14104C650, 0x14105B6B0, 0x14104BD20), subjective_camera_set_parameter_stub);
+			player_camera_set_tps_params_hook.create(SELECT_VALUE(0x14111B5D0, 0x14BE550C0, 0x14A25F300, 0x14BD71D40), player_camera_set_tps_params_stub);
+			player_camera_set_around_params_hook.create(SELECT_VALUE(0x14111AAA0, 0x14BE4EB00, 0x14A25BB10, 0x14BD6C270), player_camera_set_around_params_stub);
 			subjective_camera_set_default_hook.create(SELECT_VALUE(0x149CA3A80, 0x14C111260, 0x14A5EA060, 0x14BFA05F0), subjective_camera_set_default_stub);
 
 			utils::hook::jump(SELECT_VALUE(0x14101E599, 0x141016455, 0x14101E5E9, 0x141015B35), utils::hook::assemble(around_camera_update_parameter_stub), true);
-			utils::hook::jump(SELECT_VALUE(0x149CE7BC0, 0x14C13FBC0, 0x14A6AE6E0, 0x14BFD0A30), utils::hook::assemble(tps_camera_update_parameter_stub), true);
+			utils::hook::jump(SELECT_VALUE(0x1412BD4D0, 0x14C13FBC0, 0x14A6AE6E0, 0x14BFD0A30), utils::hook::assemble(tps_camera_update_parameter_stub), true);
 			utils::hook::jump(SELECT_VALUE(0x149CA83A7, 0x14C116AF7, 0x14A602CE7, 0x14BFA5E57), utils::hook::assemble(subjective_camera_update_parameter_stub), true);
 		}
 
@@ -513,7 +513,7 @@ namespace patches
 					utils::hook::jump(SELECT_VALUE_LANG(0x145E59910, 0x147A635B0), SELECT_VALUE_LANG(0x145E5991B, 0x147A635BB));
 				}
 
-				get_ramble_speed_hook.create(SELECT_VALUE_LANG(0x1468DA3F0, 0x1484C25F0), get_ramble_speed_stub);
+				get_ramble_speed_hook.create(SELECT_VALUE_LANG(0x140AFD550, 0x1484C25F0), get_ramble_speed_stub);
 
 				utils::hook::nop(SELECT_VALUE_LANG(0x144D21F3E, 0x144B8861D), 6);
 				utils::hook::call(SELECT_VALUE_LANG(0x144D21F3E, 0x144B8861D), strncpy_s_stub);
@@ -523,7 +523,7 @@ namespace patches
 			utils::hook::call(SELECT_VALUE(0x142E4ED98, 0x1422339D8, 0x142E4F8E8, 0x142232258), create_mutex_stub);
 			
 			// disable _purecall error
-			utils::hook::set<std::uint8_t>(SELECT_VALUE(0x141A05B96, 0x141461F6A, 0x141A05CB6, 0x141461E0A), 0xC3);
+			utils::hook::set<std::uint8_t>(SELECT_VALUE(0x141E14AE8, 0x141461F6A, 0x141A05CB6, 0x141461E0A), 0xC3);
 
 			if (var_unlock_fps->latched.enabled() || game::environment::is_dedi())
 			{

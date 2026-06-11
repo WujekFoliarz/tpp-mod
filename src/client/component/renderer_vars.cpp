@@ -110,7 +110,7 @@ namespace renderer_vars
 			utils::hook::jump(SELECT_VALUE(0x1406B9F1C, 0x14045B9BC, 0x1406B9C1C, 0x14045B5DC), utils::hook::assemble(volumetric_fog_manager_update_stub), true);
 			utils::hook::jump(SELECT_VALUE(0x143AD7595, 0x149C16F65, 0x143A52E75, 0x148D8B305), utils::hook::assemble(gr_plugin_fxaa_main_exec_stub), true);
 
-			gr_plugin_2d_main_exec_hook.create(SELECT_VALUE(0x1437C9A00, 0x149908FD0, 0x143792570, 0x148B41FB0), gr_plugin_2d_main_exec_stub);
+			gr_plugin_2d_main_exec_hook.create(SELECT_VALUE(0x1401C0AD0, 0x149908FD0, 0x143792570, 0x148B41FB0), gr_plugin_2d_main_exec_stub);
 		}
 	};
 }

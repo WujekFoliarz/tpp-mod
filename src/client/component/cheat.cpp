@@ -303,9 +303,9 @@ namespace cheat
 
 		void cmd_get_server_item_list_result_unpack_stub2(utils::hook::assembler& a)
 		{
-			a.call(SELECT_VALUE_LANG(0x141A0B8F0, 0x141A0BA10));
+			a.call(SELECT_VALUE_LANG(0x141A0B6C0, 0x141A0BA10));
 			a.mov(rcx, rax);
-			a.call(SELECT_VALUE_LANG(0x141A0BEC0, 0x141A0BFE0));
+			a.call(SELECT_VALUE_LANG(0x141A0BC90, 0x141A0BFE0));
 
 			a.push(eax);
 			a.push(rcx);
@@ -566,11 +566,11 @@ namespace cheat
 				utils::hook::jump(SELECT_VALUE_LANG(0x14083359C, 0x1408331CC), utils::hook::assemble(cmd_get_server_item_list_result_unpack_stub), true);
 				utils::hook::jump(SELECT_VALUE_LANG(0x14083361C, 0x14083324C), utils::hook::assemble(cmd_get_server_item_list_result_unpack_stub2), true);
 
-				cmd_check_server_item_correct_hook.create(SELECT_VALUE_LANG(0x145B4DE40, 0x14752AD10), cmd_check_server_item_correct_stub);
+				cmd_check_server_item_correct_hook.create(SELECT_VALUE_LANG(0x140835160, 0x14752AD10), cmd_check_server_item_correct_stub);
 			
 				send_suspicion_play_data_hook.create(SELECT_VALUE_LANG(0x140809DD0, 0x140809A30), send_suspicion_play_data_stub);
 
-				mission_preparation_get_total_gmp_cost_hook.create(SELECT_VALUE_LANG(0x1416BC400, 0x1416BC550), mission_preparation_get_total_gmp_cost_stub);
+				mission_preparation_get_total_gmp_cost_hook.create(SELECT_VALUE_LANG(0x1416BB450, 0x1416BC550), mission_preparation_get_total_gmp_cost_stub);
 				mission_preparation_get_all_equip_resource_hook.create(SELECT_VALUE_LANG(0x1416BB610, 0x1416BB760), mission_preparation_get_all_equip_resource_stub);
 				mission_preparation_calc_equip_resource_hook.create(SELECT_VALUE_LANG(0x140953030, 0x140952A50), mission_preparation_calc_equip_resource_stub);
 				utils::hook::nop(SELECT_VALUE_LANG(0x14095AA16, 0x14095A456), 6);

@@ -94,7 +94,7 @@ namespace hashes
 				return;
 			}
 
-			fox_str_hash_hook.create(SELECT_VALUE(0x140023260, 0x140022F30, 0x140023220, 0x140022FD0), fox_str_hash_stub);
+			fox_str_hash_hook.create(SELECT_VALUE(0x1400234e0, 0x140022F30, 0x140023220, 0x140022FD0), fox_str_hash_stub);
 			shared_string_to_string_id_hook.create(SELECT_VALUE(0x14001D660, 0x14001D4C0, 0x14001D620, 0x14001D490), shared_string_to_string_id_stub);
 
 			command::add("dumpstrings", []
