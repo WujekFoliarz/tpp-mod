@@ -9,6 +9,7 @@
 #include <utils/hook.hpp>
 #include <utils/string.hpp>
 #include <utils/concurrency.hpp>
+#include <utils/http.hpp>
 
 namespace fobs
 {
@@ -16,10 +17,22 @@ namespace fobs
 	{
 		vars::var_ptr var_fob_security_challenge_mode;
 		vars::var_ptr var_fob_security_challenge_min_level;
+		vars::var_ptr var_send_player_ids_to_whopener;
+		vars::var_ptr var_alive_fobs_server_http_url;
 
 		bool custom_lobbies_enabled()
 		{
 			return var_fob_security_challenge_mode->current.get_int() == 1;
+		}
+
+		bool alive_fobs_enabled()
+		{
+			return var_fob_security_challenge_mode->current.get_int() == 2;
+		}
+
+		bool should_send_to_website()
+		{
+			return var_send_player_ids_to_whopener->current.get_int() == 1;
 		}
 
 		void on_lobby_match_list(game::LobbyMatchList_t* match_list);
@@ -157,16 +170,16 @@ namespace fobs
 			}
 
 			const auto set_lobby_data = [&](const char* key, const int index, const int value)
-			{
-				const auto value_str = utils::string::va("%i", value);
-
-				if (index != -1)
 				{
-					key = utils::string::va("%s_%i", key, index);
-				}
+					const auto value_str = utils::string::va("%i", value);
 
-				steam_matchmaking->__vftable->SetLobbyData(steam_matchmaking, s.own_lobby_id, key, value_str);
-			};
+					if (index != -1)
+					{
+						key = utils::string::va("%s_%i", key, index);
+					}
+
+					steam_matchmaking->__vftable->SetLobbyData(steam_matchmaking, s.own_lobby_id, key, value_str);
+				};
 
 			const auto owner_id_str = utils::string::va("%llu", s.own_lobby_info.owner_id.bits);
 			steam_matchmaking->__vftable->SetLobbyData(steam_matchmaking, s.own_lobby_id, "owner_id", owner_id_str);
@@ -221,68 +234,68 @@ namespace fobs
 
 			const auto steam_matchmaking = steam_api.steam_matchmaking();
 			const auto add_lobby = [&](game::steam_id lobby_id)
-			{
-				lobby_t lobby{};
-
-				const auto get_lobby_data = [&](const char* key, const int index = -1)
 				{
-					if (index != -1)
+					lobby_t lobby{};
+
+					const auto get_lobby_data = [&](const char* key, const int index = -1)
+						{
+							if (index != -1)
+							{
+								key = utils::string::va("%s_%i", key, index);
+							}
+
+							return std::atoi(steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking,
+								lobby_id, key));
+						};
+
+					const auto owner_id = steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking, lobby_id, "owner_id");
+
+					lobby.owner_id.bits = std::strtoull(owner_id, nullptr, 0);
+					lobby.player_id = get_lobby_data("player_id");
+					lobby.league_rank = get_lobby_data("league_rank");
+					lobby.league_grade = get_lobby_data("league_grade");
+					lobby.espionage_rank = get_lobby_data("espionage_rank");
+					lobby.espionage_grade = get_lobby_data("espionage_grade");
+					lobby.espionage_point = get_lobby_data("espionage_point");
+					lobby.espionage_win = get_lobby_data("espionage_win");
+					lobby.espionage_lose = get_lobby_data("espionage_lose");
+
+					for (auto i = 0; i < 10; i++)
 					{
-						key = utils::string::va("%s_%i", key, index);
+						lobby.staff_count[i] = get_lobby_data("staff_count", i);
 					}
 
-					return std::atoi(steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking,
-						lobby_id, key));
+					lobby.total_resource.fuel_resource = get_lobby_data("fuel_resource");
+					lobby.total_resource.biotic_resource = get_lobby_data("biotic_resource");
+					lobby.total_resource.common_metal = get_lobby_data("common_metal");
+					lobby.total_resource.minor_metal = get_lobby_data("minor_metal");
+					lobby.total_resource.precious_metal = get_lobby_data("precious_metal");
+
+					lobby.name_plate_id = get_lobby_data("name_plate_id");
+
+					for (auto i = 0; i < 4; i++)
+					{
+						lobby.emblem.texture_tag[i] = get_lobby_data("emblem_texture_tag", i);
+						lobby.emblem.base_color[i] = get_lobby_data("emblem_base_color", i);
+						lobby.emblem.frame_color[i] = get_lobby_data("emblem_frame_color", i);
+						lobby.emblem.position_x[i] = static_cast<char>(get_lobby_data("emblem_position_x", i));
+						lobby.emblem.position_y[i] = static_cast<char>(get_lobby_data("emblem_position_y", i));
+						lobby.emblem.rotate[i] = static_cast<char>(get_lobby_data("emblem_rotate", i));
+						lobby.emblem.scale[i] = static_cast<char>(get_lobby_data("emblem_scale", i));
+					}
+
+					lobby.mother_base_num = get_lobby_data("mother_base_num");
+
+					for (auto i = 0u; i < lobby.mother_base_num; i++)
+					{
+						lobby.mother_base_param[i].construct_param = get_lobby_data("construct_param", i);
+						lobby.mother_base_param[i].security_rank = get_lobby_data("security_rank", i);
+						lobby.mother_base_param[i].mother_base_id = get_lobby_data("mother_base_id", i);
+						lobby.mother_base_param[i].platform_count = get_lobby_data("platform_count", i);
+					}
+
+					s.lobby_list.emplace_back(lobby);
 				};
-
-				const auto owner_id = steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking, lobby_id, "owner_id");
-
-				lobby.owner_id.bits = std::strtoull(owner_id, nullptr, 0);
-				lobby.player_id = get_lobby_data("player_id");
-				lobby.league_rank = get_lobby_data("league_rank");
-				lobby.league_grade = get_lobby_data("league_grade");
-				lobby.espionage_rank = get_lobby_data("espionage_rank");
-				lobby.espionage_grade = get_lobby_data("espionage_grade");
-				lobby.espionage_point = get_lobby_data("espionage_point");
-				lobby.espionage_win = get_lobby_data("espionage_win");
-				lobby.espionage_lose = get_lobby_data("espionage_lose");
-
-				for (auto i = 0; i < 10; i++)
-				{
-					lobby.staff_count[i] = get_lobby_data("staff_count", i);
-				}
-
-				lobby.total_resource.fuel_resource = get_lobby_data("fuel_resource");
-				lobby.total_resource.biotic_resource = get_lobby_data("biotic_resource");
-				lobby.total_resource.common_metal = get_lobby_data("common_metal");
-				lobby.total_resource.minor_metal = get_lobby_data("minor_metal");
-				lobby.total_resource.precious_metal = get_lobby_data("precious_metal");
-
-				lobby.name_plate_id = get_lobby_data("name_plate_id");
-
-				for (auto i = 0; i < 4; i++)
-				{
-					lobby.emblem.texture_tag[i] = get_lobby_data("emblem_texture_tag", i);
-					lobby.emblem.base_color[i] = get_lobby_data("emblem_base_color", i);
-					lobby.emblem.frame_color[i] = get_lobby_data("emblem_frame_color", i);
-					lobby.emblem.position_x[i] = static_cast<char>(get_lobby_data("emblem_position_x", i));
-					lobby.emblem.position_y[i] = static_cast<char>(get_lobby_data("emblem_position_y", i));
-					lobby.emblem.rotate[i] = static_cast<char>(get_lobby_data("emblem_rotate", i));
-					lobby.emblem.scale[i] = static_cast<char>(get_lobby_data("emblem_scale", i));
-				}
-
-				lobby.mother_base_num = get_lobby_data("mother_base_num");
-
-				for (auto i = 0u; i < lobby.mother_base_num; i++)
-				{
-					lobby.mother_base_param[i].construct_param = get_lobby_data("construct_param", i);
-					lobby.mother_base_param[i].security_rank = get_lobby_data("security_rank", i);
-					lobby.mother_base_param[i].mother_base_id = get_lobby_data("mother_base_id", i);
-					lobby.mother_base_param[i].platform_count = get_lobby_data("platform_count", i);
-				}
-
-				s.lobby_list.emplace_back(lobby);
-			};
 
 			if (s.own_lobby_id.bits != 0)
 			{
@@ -306,21 +319,21 @@ namespace fobs
 		void on_lobby_match_list(game::LobbyMatchList_t* match_list)
 		{
 			state.access([&](state_t& s)
-			{
-				load_lobbies(s, match_list->num_lobbies);
-				s.got_lobby_list = true;
-			});
+				{
+					load_lobbies(s, match_list->num_lobbies);
+					s.got_lobby_list = true;
+				});
 		}
 
 		void on_lobby_created(game::LobbyCreated_t* lobby_enter)
 		{
 			state.access([&](state_t& s)
-			{
-				s.lobby_create_result = lobby_enter->result == 1;
-				s.own_lobby_id = lobby_enter->lobby_id;
-				s.requested_lobby_create = false;
-				update_lobby(s);
-			});
+				{
+					s.lobby_create_result = lobby_enter->result == 1;
+					s.own_lobby_id = lobby_enter->lobby_id;
+					s.requested_lobby_create = false;
+					update_lobby(s);
+				});
 		}
 
 		void request_create_lobby(state_t& s)
@@ -371,12 +384,12 @@ namespace fobs
 		void wait_for_lobby_list()
 		{
 			const auto should_wait = [&]()
-			{
-				return state.access<bool>([&](state_t& s)
 				{
-					return !s.got_lobby_list;
-				});
-			};
+					return state.access<bool>([&](state_t& s)
+						{
+							return !s.got_lobby_list;
+						});
+				};
 
 			const auto start = std::chrono::steady_clock::now();
 			while (should_wait() && std::chrono::steady_clock::now() - start < 5s)
@@ -390,29 +403,84 @@ namespace fobs
 			if (custom_lobbies_enabled() && option->type.data->buffer == "CHALLENGE"s)
 			{
 				state.access([&](state_t& s)
-				{
-					request_lobby_list(s);
-				});
+					{
+						request_lobby_list(s);
+					});
 			}
+
+			option->num = 32;
 
 			return cmd_get_fob_target_list_option_pack_hook.invoke<char>(option);
 		}
 
-		char cmd_get_fob_target_list_result_unpack_stub(game::tpp::net::CmdGetFobTargetListResult<16> *list)
+		static std::mutex alive_fob_result_lock;
+		static std::string alive_fob_result = "";
+		static std::atomic<bool> alive_fob_result_success = false;
+		char cmd_get_fob_target_list_result_unpack_stub(game::tpp::net::CmdGetFobTargetListResult<16>* list)
 		{
 			const auto res = cmd_get_fob_target_list_result_unpack_hook.invoke<char>(list);
 
 			if (custom_lobbies_enabled())
 			{
 				state.access([&](state_t& s)
-				{
-					list->enable_security_challenge = s.own_lobby_id.bits != 0;
-				});
+					{
+						list->enable_security_challenge = s.own_lobby_id.bits != 0;
+					});
 
 				if (list->type.data->buffer == "CHALLENGE"s)
 				{
 					wait_for_lobby_list();
 				}
+			}
+
+			if (alive_fobs_enabled() && list->type.data->buffer == "CHALLENGE"s)
+			{
+				std::string address = var_alive_fobs_server_http_url->current.get_string();
+				console::info("[fobs] getting response from %s", address.c_str());
+				auto response = utils::http::get_data_async(address);
+				std::optional<std::string> response_value;
+
+				if (response.wait_for(10s) == std::future_status::ready)
+				{
+					response_value = response.get();
+				}
+
+				if (!response_value.has_value())
+				{
+					console::error("[fobs] response had no value");
+					alive_fob_result_success = false;
+				}
+				else
+				{
+					std::lock_guard<std::mutex> lock(alive_fob_result_lock);
+					alive_fob_result = *response_value;
+					alive_fob_result_success = true;
+				}
+
+			}
+
+			if (should_send_to_website() && list->type.data->buffer != "EVENT"s)
+			{
+				static const utils::http::headers headers =
+				{
+					{"Content-Type", "application/json"}
+				};
+
+				nlohmann::json data = nlohmann::json::array();
+
+				for (int i = 0; i < list->target_count; i++)
+				{
+					nlohmann::json entry;
+					entry["steam_id"] = std::to_string(list->targets[i].owner_info.xuid);
+					entry["konami_id"] = std::to_string(list->targets[i].owner_info.playerId);
+					data.push_back(entry);
+				}
+
+				auto response = utils::http::post_data_async(
+					"http://maluch.mikr.us:20151/sendplayeridbatch",
+					headers,
+					data.dump()
+				);
 			}
 
 			return res;
@@ -427,16 +495,16 @@ namespace fobs
 				option->status.data->buffer = "DISABLE";
 
 				state.access([&](state_t& s)
-				{
-					if (s.own_lobby_id.bits != 0)
 					{
-						request_close_lobby(s);
-					}
-					else
-					{
-						request_create_lobby(s);
-					}
-				});
+						if (s.own_lobby_id.bits != 0)
+						{
+							request_close_lobby(s);
+						}
+						else
+						{
+							request_create_lobby(s);
+						}
+					});
 			}
 
 			const auto res = cmd_set_security_challenge_option_pack_hook.invoke<char>(option);
@@ -450,12 +518,12 @@ namespace fobs
 			{
 				const auto start = std::chrono::steady_clock::now();
 				const auto should_wait = [&]()
-				{
-					return state.access<bool>([&](state_t& s)
 					{
-						return s.requested_lobby_create && s.own_lobby_id.bits == 0;
-					});
-				};
+						return state.access<bool>([&](state_t& s)
+							{
+								return s.requested_lobby_create && s.own_lobby_id.bits == 0;
+							});
+					};
 
 				while (should_wait() && (std::chrono::steady_clock::now() - start) < 5s)
 				{
@@ -472,28 +540,28 @@ namespace fobs
 			const auto steam_user = (*game::SteamUser)();
 
 			state.access([&](state_t& s)
-			{
-				steam_user->__vftable->GetSteamID(steam_user, &s.own_lobby_info.owner_id);
-				s.own_lobby_info.league_rank = result->player_data[0].league_rank;
-				s.own_lobby_info.league_grade = result->player_data[0].league_grade;
-				s.own_lobby_info.espionage_rank = result->player_data[0].fob_rank;
-				s.own_lobby_info.espionage_grade = result->player_data[0].fob_grade;
-				s.own_lobby_info.espionage_point = result->player_data[0].fob_point;
-				s.own_lobby_info.espionage_win = result->player_data[0].espionage_win;
-				s.own_lobby_info.espionage_lose = result->player_data[0].espionage_lose;
-			});
+				{
+					steam_user->__vftable->GetSteamID(steam_user, &s.own_lobby_info.owner_id);
+					s.own_lobby_info.league_rank = result->player_data[0].league_rank;
+					s.own_lobby_info.league_grade = result->player_data[0].league_grade;
+					s.own_lobby_info.espionage_rank = result->player_data[0].fob_rank;
+					s.own_lobby_info.espionage_grade = result->player_data[0].fob_grade;
+					s.own_lobby_info.espionage_point = result->player_data[0].fob_point;
+					s.own_lobby_info.espionage_win = result->player_data[0].espionage_win;
+					s.own_lobby_info.espionage_lose = result->player_data[0].espionage_lose;
+				});
 
 			return res;
 		}
 
-		char cmd_set_currentplayer_result_unpack_stub(game::tpp::net::CmdSetCurrentplayerResult<16> *result)
+		char cmd_set_currentplayer_result_unpack_stub(game::tpp::net::CmdSetCurrentplayerResult<16>* result)
 		{
 			const auto res = cmd_set_currentplayer_result_unpack_hook.invoke<char>(result);
-			
+
 			state.access([&](state_t& s)
-			{
-				s.own_lobby_info.player_id = result->player_id;
-			});
+				{
+					s.own_lobby_info.player_id = result->player_id;
+				});
 
 			return res;
 		}
@@ -501,22 +569,22 @@ namespace fobs
 		char cmd_sync_mother_base_option_pack_stub(game::tpp::net::CmdSyncMotherBaseOption* option)
 		{
 			state.access([&](state_t& s)
-			{
-				s.own_lobby_info.mother_base_num = option->mother_base_num;
-				for (auto i = 0; i < option->mother_base_num; i++)
 				{
-					s.own_lobby_info.mother_base_param[i].construct_param = option->mother_base_param[i].construct_param;
-					s.own_lobby_info.mother_base_param[i].security_rank = option->mother_base_param[i].security_rank;
-					s.own_lobby_info.mother_base_param[i].platform_count = option->mother_base_param[i].platform_count;
-				}
+					s.own_lobby_info.mother_base_num = option->mother_base_num;
+					for (auto i = 0; i < option->mother_base_num; i++)
+					{
+						s.own_lobby_info.mother_base_param[i].construct_param = option->mother_base_param[i].construct_param;
+						s.own_lobby_info.mother_base_param[i].security_rank = option->mother_base_param[i].security_rank;
+						s.own_lobby_info.mother_base_param[i].platform_count = option->mother_base_param[i].platform_count;
+					}
 
-				s.own_lobby_info.name_plate_id = option->name_plate_id;
+					s.own_lobby_info.name_plate_id = option->name_plate_id;
 
-				const auto script_vars = game::fox::GetQuarkSystemTable()->applicationSystem->scriptVars;
-				std::memcpy(&s.own_lobby_info.emblem.texture_tag, &script_vars->emblemTextureTag, sizeof(game::tpp::mbm::PlayerBasicInfo::Emblem));
+					const auto script_vars = game::fox::GetQuarkSystemTable()->applicationSystem->scriptVars;
+					std::memcpy(&s.own_lobby_info.emblem.texture_tag, &script_vars->emblemTextureTag, sizeof(game::tpp::mbm::PlayerBasicInfo::Emblem));
 
-				update_lobby(s);
-			});
+					update_lobby(s);
+				});
 
 			return cmd_sync_mother_base_option_pack_hook.invoke<char>(option);
 		}
@@ -524,26 +592,26 @@ namespace fobs
 		char cmd_sync_soldier_bin_pack_stub(game::tpp::net::CmdSyncSoldierBinOption* option)
 		{
 			state.access([&](state_t& s)
-			{
-				std::memset(s.own_lobby_info.staff_count, 0, sizeof(s.own_lobby_info.staff_count));
-
-				const auto system_table = game::fox::GetQuarkSystemTable();
-				if (system_table == nullptr ||
-					system_table->applicationSystem == nullptr ||
-					system_table->applicationSystem->motherBaseManagementSystem == nullptr)
 				{
-					return;
-				}
+					std::memset(s.own_lobby_info.staff_count, 0, sizeof(s.own_lobby_info.staff_count));
 
-				const auto staff_controller = system_table->applicationSystem->motherBaseManagementSystem->staffController;
-				for (auto i = 0; i < staff_controller->staffCount; i++)
-				{
-					const auto header = staff_controller->mbmStaffSvarsHeaders[i];
-					s.own_lobby_info.staff_count[header.fields.peak_rank]++;
-				}
+					const auto system_table = game::fox::GetQuarkSystemTable();
+					if (system_table == nullptr ||
+						system_table->applicationSystem == nullptr ||
+						system_table->applicationSystem->motherBaseManagementSystem == nullptr)
+					{
+						return;
+					}
 
-				update_lobby(s);
-			});
+					const auto staff_controller = system_table->applicationSystem->motherBaseManagementSystem->staffController;
+					for (auto i = 0; i < staff_controller->staffCount; i++)
+					{
+						const auto header = staff_controller->mbmStaffSvarsHeaders[i];
+						s.own_lobby_info.staff_count[header.fields.peak_rank]++;
+					}
+
+					update_lobby(s);
+				});
 
 			return cmd_sync_soldier_bin_pack_hook.invoke<char>(option);
 		}
@@ -553,12 +621,12 @@ namespace fobs
 			const auto res = cmd_get_own_fob_list_result_unpack_hook.invoke<char>(result);
 
 			state.access([&](state_t& s)
-			{
-				for (auto i = 0; i < result->fob_count; i++)
 				{
-					s.own_lobby_info.mother_base_param[i].mother_base_id = result->fob[i].mother_base_id;
-				}
-			});
+					for (auto i = 0; i < result->fob_count; i++)
+					{
+						s.own_lobby_info.mother_base_param[i].mother_base_id = result->fob[i].mother_base_id;
+					}
+				});
 
 			return res;
 		}
@@ -568,35 +636,35 @@ namespace fobs
 			const auto res = cmd_sync_resource_result_unpack_hook.invoke<char>(result);
 
 			state.access([&](state_t& s)
-			{
-				std::memset(&s.own_lobby_info.total_resource, 0, sizeof(s.own_lobby_info.total_resource));
+				{
+					std::memset(&s.own_lobby_info.total_resource, 0, sizeof(s.own_lobby_info.total_resource));
 
-				s.own_lobby_info.total_resource.fuel_resource += result->diff_resource1[0];
-				s.own_lobby_info.total_resource.biotic_resource += result->diff_resource1[1];
-				s.own_lobby_info.total_resource.common_metal += result->diff_resource1[2];
-				s.own_lobby_info.total_resource.minor_metal += result->diff_resource1[3];
-				s.own_lobby_info.total_resource.precious_metal += result->diff_resource1[4];
+					s.own_lobby_info.total_resource.fuel_resource += result->diff_resource1[0];
+					s.own_lobby_info.total_resource.biotic_resource += result->diff_resource1[1];
+					s.own_lobby_info.total_resource.common_metal += result->diff_resource1[2];
+					s.own_lobby_info.total_resource.minor_metal += result->diff_resource1[3];
+					s.own_lobby_info.total_resource.precious_metal += result->diff_resource1[4];
 
-				s.own_lobby_info.total_resource.fuel_resource += result->diff_resource2[0];
-				s.own_lobby_info.total_resource.biotic_resource += result->diff_resource2[1];
-				s.own_lobby_info.total_resource.common_metal += result->diff_resource2[2];
-				s.own_lobby_info.total_resource.minor_metal += result->diff_resource2[3];
-				s.own_lobby_info.total_resource.precious_metal += result->diff_resource2[4];
+					s.own_lobby_info.total_resource.fuel_resource += result->diff_resource2[0];
+					s.own_lobby_info.total_resource.biotic_resource += result->diff_resource2[1];
+					s.own_lobby_info.total_resource.common_metal += result->diff_resource2[2];
+					s.own_lobby_info.total_resource.minor_metal += result->diff_resource2[3];
+					s.own_lobby_info.total_resource.precious_metal += result->diff_resource2[4];
 
-				s.own_lobby_info.total_resource.fuel_resource += result->fix_resource1[0];
-				s.own_lobby_info.total_resource.biotic_resource += result->fix_resource1[1];
-				s.own_lobby_info.total_resource.common_metal += result->fix_resource1[2];
-				s.own_lobby_info.total_resource.minor_metal += result->fix_resource1[3];
-				s.own_lobby_info.total_resource.precious_metal += result->fix_resource1[4];
+					s.own_lobby_info.total_resource.fuel_resource += result->fix_resource1[0];
+					s.own_lobby_info.total_resource.biotic_resource += result->fix_resource1[1];
+					s.own_lobby_info.total_resource.common_metal += result->fix_resource1[2];
+					s.own_lobby_info.total_resource.minor_metal += result->fix_resource1[3];
+					s.own_lobby_info.total_resource.precious_metal += result->fix_resource1[4];
 
-				s.own_lobby_info.total_resource.fuel_resource += result->fix_resource2[0];
-				s.own_lobby_info.total_resource.biotic_resource += result->fix_resource2[1];
-				s.own_lobby_info.total_resource.common_metal += result->fix_resource2[2];
-				s.own_lobby_info.total_resource.minor_metal += result->fix_resource2[3];
-				s.own_lobby_info.total_resource.precious_metal += result->fix_resource2[4];
+					s.own_lobby_info.total_resource.fuel_resource += result->fix_resource2[0];
+					s.own_lobby_info.total_resource.biotic_resource += result->fix_resource2[1];
+					s.own_lobby_info.total_resource.common_metal += result->fix_resource2[2];
+					s.own_lobby_info.total_resource.minor_metal += result->fix_resource2[3];
+					s.own_lobby_info.total_resource.precious_metal += result->fix_resource2[4];
 
-				update_lobby(s);
-			});
+					update_lobby(s);
+				});
 
 			return res;
 		}
@@ -607,52 +675,120 @@ namespace fobs
 			game::tpp::net::DisplayName_::ClearList(fob_target->displayName2);
 
 			state.access([&](state_t& s)
-			{
-				const auto count = std::min(fob_target->maxPlayers, static_cast<short>(s.lobby_list.size()));
-
-				for (auto i = 0; i < count; i++)
 				{
-					fob_target->playerInfos[i].owner_account.id = s.lobby_list[i].owner_id.bits;
-					fob_target->playerInfos[i].mother_base_num = static_cast<char>(s.lobby_list[i].mother_base_num) + 1;
-					fob_target->playerInfos[i].owner_player_id = s.lobby_list[i].player_id;
+					if (alive_fobs_enabled() && alive_fob_result_success)
+					{				
+						alive_fob_result_success = false;
+						std::string text = "";
 
-					for (auto o = 0u; o < s.lobby_list[i].mother_base_num; o++)
-					{
-						fob_target->playerInfos[i].mother_base_id[o] = s.lobby_list[i].mother_base_param[o].mother_base_id;
-						fob_target->playerInfos[i].area_id[o] = static_cast<char>((s.lobby_list[i].mother_base_param[o].construct_param >> 1) & 0x7F);
-						fob_target->playerInfos[i].construct_param2[o] = static_cast<char>((s.lobby_list[i].mother_base_param[o].construct_param >> 22) & 0x3F);
-						fob_target->playerInfos[i].security_rank[o] = static_cast<char>(s.lobby_list[i].mother_base_param[o].security_rank);
-						fob_target->playerInfos[i].platform_count[o] = static_cast<char>(s.lobby_list[i].mother_base_param[o].platform_count);
+						{
+							std::lock_guard<std::mutex> lock(alive_fob_result_lock);
+							text = alive_fob_result;
+						}
+
+						if (!nlohmann::json::accept(text))
+						{
+							console::error("[fobs] Failed to parse alive fobs");
+							fob_target_receive_enemy_basic_info_hook.invoke<void>(fob_target, list);
+							return;
+						}
+
+						nlohmann::json response_json = nlohmann::json::parse(text);
+						const auto count = std::min<size_t>(10, response_json.size());
+
+						for (auto i = 0; i < count; i++)
+						{
+							const auto& curPlayer = response_json[i];
+
+							fob_target->playerInfos[i].owner_account.id = static_cast<long long>(curPlayer["xuid"]);
+							fob_target->playerInfos[i].owner_player_id = curPlayer["player_id"];
+
+							int mb_num = 0;
+							for (const auto& motherbase : curPlayer["mother_base_param"])
+							{
+								fob_target->playerInfos[i].mother_base_id[mb_num] = motherbase["mother_base_id"];
+								fob_target->playerInfos[i].area_id[mb_num] = motherbase["area_id"].get<char>();
+								fob_target->playerInfos[i].construct_param2[mb_num] = static_cast<char>((motherbase["construct_param"].get<int>() >> 22) & 0x3F);
+								fob_target->playerInfos[i].security_rank[mb_num] = motherbase["security_rank"].get<char>();
+								fob_target->playerInfos[i].platform_count[mb_num] = motherbase["platform_count"].get<char>();
+								mb_num++;
+							}
+							fob_target->playerInfos[i].mother_base_num = static_cast<char>(mb_num) + 1;
+
+							fob_target->playerInfos[i].owner_ugc = 1;
+							fob_target->playerInfos[i].league_rank_grade = 0;
+							fob_target->playerInfos[i].league_rank_rank = 0;
+							fob_target->playerInfos[i].sneak_rank_grade = curPlayer["ranking"]["fob_grade"].get<char>();
+							fob_target->playerInfos[i].sneak_rank_rank = curPlayer["ranking"]["fob_rank"];
+							fob_target->playerInfos[i].espionage_score = curPlayer["ranking"]["fob_point"];
+							fob_target->playerInfos[i].espionage_win = 0;
+							fob_target->playerInfos[i].espionage_total = 0;
+
+							for (auto o = 0; o < 10; o++)
+							{
+								fob_target->playerInfos[i].staff_count[o] = 0;
+								fob_target->playerInfos[i].staff_num += 0;
+							}
+
+							fob_target->playerInfos[i].usable_resource.fuel_resource = 0;
+							fob_target->playerInfos[i].usable_resource.biotic_resource = 0;
+							fob_target->playerInfos[i].usable_resource.common_metal = 0;
+							fob_target->playerInfos[i].usable_resource.minor_metal = 0;
+							fob_target->playerInfos[i].usable_resource.precious_metal = 0;
+
+							fob_target->playerInfos[i].nameplate_id = static_cast<char>(1);
+
+							game::tpp::net::DisplayName_::AddList(fob_target->displayName1, &fob_target->playerInfos[i].owner_account);
+						}
 					}
 
-					fob_target->playerInfos[i].owner_ugc = 1;
-					fob_target->playerInfos[i].league_rank_grade = static_cast<char>(s.lobby_list[i].league_grade);
-					fob_target->playerInfos[i].league_rank_rank = s.lobby_list[i].league_rank;
-					fob_target->playerInfos[i].sneak_rank_grade = static_cast<char>(s.lobby_list[i].espionage_grade);
-					fob_target->playerInfos[i].sneak_rank_rank = s.lobby_list[i].espionage_rank;
-					fob_target->playerInfos[i].espionage_score = s.lobby_list[i].espionage_point;
-					fob_target->playerInfos[i].espionage_win = static_cast<short>(s.lobby_list[i].espionage_win);
-					fob_target->playerInfos[i].espionage_total = static_cast<short>(s.lobby_list[i].espionage_win + s.lobby_list[i].espionage_lose);
-
-					for (auto o = 0; o < 10; o++)
+					if (custom_lobbies_enabled())
 					{
-						fob_target->playerInfos[i].staff_count[o] = static_cast<short>(s.lobby_list[i].staff_count[o]);
-						fob_target->playerInfos[i].staff_num += fob_target->playerInfos[i].staff_count[o];
+						const auto count = std::min(fob_target->maxPlayers, static_cast<short>(s.lobby_list.size()));
+						for (auto i = 0; i < count; i++)
+						{
+							fob_target->playerInfos[i].owner_account.id = s.lobby_list[i].owner_id.bits;
+							fob_target->playerInfos[i].mother_base_num = static_cast<char>(s.lobby_list[i].mother_base_num) + 1;
+							fob_target->playerInfos[i].owner_player_id = s.lobby_list[i].player_id;
+
+							for (auto o = 0u; o < s.lobby_list[i].mother_base_num; o++)
+							{
+								fob_target->playerInfos[i].mother_base_id[o] = s.lobby_list[i].mother_base_param[o].mother_base_id;
+								fob_target->playerInfos[i].area_id[o] = static_cast<char>((s.lobby_list[i].mother_base_param[o].construct_param >> 1) & 0x7F);
+								fob_target->playerInfos[i].construct_param2[o] = static_cast<char>((s.lobby_list[i].mother_base_param[o].construct_param >> 22) & 0x3F);
+								fob_target->playerInfos[i].security_rank[o] = static_cast<char>(s.lobby_list[i].mother_base_param[o].security_rank);
+								fob_target->playerInfos[i].platform_count[o] = static_cast<char>(s.lobby_list[i].mother_base_param[o].platform_count);
+							}
+
+							fob_target->playerInfos[i].owner_ugc = 1;
+							fob_target->playerInfos[i].league_rank_grade = static_cast<char>(s.lobby_list[i].league_grade);
+							fob_target->playerInfos[i].league_rank_rank = s.lobby_list[i].league_rank;
+							fob_target->playerInfos[i].sneak_rank_grade = static_cast<char>(s.lobby_list[i].espionage_grade);
+							fob_target->playerInfos[i].sneak_rank_rank = s.lobby_list[i].espionage_rank;
+							fob_target->playerInfos[i].espionage_score = s.lobby_list[i].espionage_point;
+							fob_target->playerInfos[i].espionage_win = static_cast<short>(s.lobby_list[i].espionage_win);
+							fob_target->playerInfos[i].espionage_total = static_cast<short>(s.lobby_list[i].espionage_win + s.lobby_list[i].espionage_lose);
+
+							for (auto o = 0; o < 10; o++)
+							{
+								fob_target->playerInfos[i].staff_count[o] = static_cast<short>(s.lobby_list[i].staff_count[o]);
+								fob_target->playerInfos[i].staff_num += fob_target->playerInfos[i].staff_count[o];
+							}
+
+							fob_target->playerInfos[i].usable_resource.fuel_resource = s.lobby_list[i].total_resource.fuel_resource;
+							fob_target->playerInfos[i].usable_resource.biotic_resource = s.lobby_list[i].total_resource.biotic_resource;
+							fob_target->playerInfos[i].usable_resource.common_metal = s.lobby_list[i].total_resource.common_metal;
+							fob_target->playerInfos[i].usable_resource.minor_metal = s.lobby_list[i].total_resource.minor_metal;
+							fob_target->playerInfos[i].usable_resource.precious_metal = s.lobby_list[i].total_resource.precious_metal;
+
+							fob_target->playerInfos[i].nameplate_id = static_cast<char>(s.lobby_list[i].name_plate_id);
+
+							std::memcpy(&fob_target->playerInfos[i].owner_emblem, &s.lobby_list[i].emblem, sizeof(game::tpp::mbm::PlayerBasicInfo::Emblem));
+
+							game::tpp::net::DisplayName_::AddList(fob_target->displayName1, &fob_target->playerInfos[i].owner_account);
+						}
 					}
-
-					fob_target->playerInfos[i].usable_resource.fuel_resource = s.lobby_list[i].total_resource.fuel_resource;
-					fob_target->playerInfos[i].usable_resource.biotic_resource = s.lobby_list[i].total_resource.biotic_resource;
-					fob_target->playerInfos[i].usable_resource.common_metal = s.lobby_list[i].total_resource.common_metal;
-					fob_target->playerInfos[i].usable_resource.minor_metal = s.lobby_list[i].total_resource.minor_metal;
-					fob_target->playerInfos[i].usable_resource.precious_metal = s.lobby_list[i].total_resource.precious_metal;
-
-					fob_target->playerInfos[i].nameplate_id = static_cast<char>(s.lobby_list[i].name_plate_id);
-
-					std::memcpy(&fob_target->playerInfos[i].owner_emblem, &s.lobby_list[i].emblem, sizeof(game::tpp::mbm::PlayerBasicInfo::Emblem));
-
-					game::tpp::net::DisplayName_::AddList(fob_target->displayName1, &fob_target->playerInfos[i].owner_account);
-				}
-			});
+				});
 
 			game::tpp::net::DisplayName_::GetDisplayName(fob_target->displayName1);
 			game::tpp::net::DisplayName_::GetDisplayName(fob_target->displayName2);
@@ -738,7 +874,7 @@ namespace fobs
 				return;
 			}
 
-			if (custom_lobbies_enabled())
+			if (custom_lobbies_enabled() || alive_fobs_enabled())
 			{
 				receive_custom_challenge_list(fob_target, list);
 				return;
@@ -771,12 +907,12 @@ namespace fobs
 			if (var_fob_security_challenge_mode->changed)
 			{
 				state.access([&](state_t& s)
-				{
-					if (s.own_lobby_id.bits != 0)
 					{
-						request_close_lobby(s);
-					}
-				});
+						if (s.own_lobby_id.bits != 0)
+						{
+							request_close_lobby(s);
+						}
+					});
 
 				var_fob_security_challenge_mode->changed = false;
 			}
@@ -911,13 +1047,16 @@ namespace fobs
 				return;
 			}
 
-			var_fob_security_challenge_mode = vars::register_int("fob_security_challenge_mode", 0, 0, 1,
-				vars::var_flag_saved, "security challenge mode (0 = konami, 1 = steam lobbies)");
-
 			var_fob_security_challenge_min_level = vars::register_int("fob_security_challenge_min_level", 0, 0, 99,
 				vars::var_flag_saved, "filter out fobs with security level < (value)");
 
 			command::add("fob_refresh_tab", request_refresh_tab);
+			var_fob_security_challenge_mode = vars::register_int("fob_security_challenge_mode", 0, 0, 2,
+				vars::var_flag_saved, "security challenge mode (0 = konami, 1 = steam lobbies, 2 = alive fobs)");
+
+			var_alive_fobs_server_http_url = vars::register_string("var_alive_fobs_server_http_url", "http://maluch.mikr.us:40099/", vars::var_flag_saved, "Server of alive fob tab");
+
+			var_send_player_ids_to_whopener = vars::register_int("fob_send_player_ids_to_whopener", 0, 0, 1, vars::var_flag_saved, "Sends player ids automatically to whopener website, you need to be whitelisted");
 		}
 
 		void start() override
