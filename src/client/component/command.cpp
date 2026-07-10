@@ -291,6 +291,16 @@ namespace command
 		return std::atoi(this->tokens_[index].data());
 	}
 
+	float params::get_float(const size_t index) const
+	{
+		if (this->tokens_.size() <= index)
+		{
+			return 0;
+		}
+
+		return static_cast<float>(std::atof(this->tokens_[index].data()));
+	}
+
 	std::uint64_t params::get_uint64(const size_t index) const
 	{
 		if (this->tokens_.size() <= index)
@@ -604,6 +614,12 @@ namespace command
 			command::add("wait", []()
 			{
 
+			});
+
+			command::add("framestats", []()
+			{
+				const auto time_system = game::fox::GetTimeSystem();
+				console::info("frametime: %f, fps: %i\n", time_system.frameTime, static_cast<int>(1.f / time_system.frameTime));
 			});
 
 			if (game::environment::is_tpp())

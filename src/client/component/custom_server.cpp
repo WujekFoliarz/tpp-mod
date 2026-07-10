@@ -6,18 +6,21 @@
 #include "scheduler.hpp"
 #include "console.hpp"
 #include "vars.hpp"
+#include "custom_server.hpp"
 
 #include <utils/string.hpp>
 #include <utils/hook.hpp>
 #include <utils/flags.hpp>
 #include <utils/io.hpp>
 #include <utils/cryptography.hpp>
+#include <utils/http.hpp>
+#include <utils/compression.hpp>
 
 namespace custom_server
 {
 	namespace
 	{
-		char custom_url[0x2000]{};
+		char custom_url[0x100]{};
 
 		utils::hook::detour file_read_hook;
 		utils::hook::detour file_write_hook;
@@ -30,6 +33,8 @@ namespace custom_server
 		};
 
 		vars::var_ptr var_custom_server;
+		vars::var_ptr var_net_proxy_url;
+		vars::var_ptr var_net_server_url_ovveride;
 
 		struct steam_storage;
 
@@ -99,7 +104,7 @@ namespace custom_server
 			a.pop(rax);
 
 			a.test(eax, eax);
-			a.jmp(SELECT_VALUE_LANG(0x143593E88, 0x14357A208));
+			a.jmp(SELECT_VALUE_LANG(0x14016FC38, 0x14357A208));
 		}
 
 		void* file_read_stub(void* data, const char* file_name, size_t* result_file_size, void* buffer, 
@@ -143,7 +148,6 @@ namespace custom_server
 			return buffer;
 		}
 
-
 		HANDLE create_file_stub(LPCWSTR file_name, DWORD desired_access, DWORD share_mode, 
 			LPSECURITY_ATTRIBUTES security_attributes, DWORD creation_disp, DWORD flags, HANDLE template_file)
 		{
@@ -167,22 +171,8 @@ namespace custom_server
 			const auto new_path = get_new_path();
 			return CreateFileW(new_path.data(), desired_access, share_mode, security_attributes, creation_disp, flags, template_file);
 		}
-	}
 
-	bool is_using_custom_server()
-	{
-		return custom_url[0] != 0;
-	}
-
-	class component final : public component_interface
-	{
-	public:
-		void pre_load() override
-		{
-			var_custom_server = vars::register_string("net_custom_server", "", vars::var_flag_saved | vars::var_flag_latched, "custom server url");
-		}
-
-		void start() override
+		void apply_custom_server()
 		{
 			const auto custom_server = var_custom_server->current.get_string();
 
@@ -196,18 +186,253 @@ namespace custom_server
 
 			if (game::environment::is_tpp())
 			{
-				file_read_hook.create(SELECT_VALUE_LANG(0x143593E20, 0x14357A1A0), file_read_stub);
-				file_write_hook.create(SELECT_VALUE_LANG(0x143596770, 0x14357B660), file_write_stub);
+				file_read_hook.create(SELECT_VALUE_LANG(0x14016FBD0, 0x14357A1A0), file_read_stub);
+				file_write_hook.create(SELECT_VALUE_LANG(0x1401703C0, 0x14357B660), file_write_stub);
 
-				utils::hook::set(SELECT_VALUE_LANG(0x14DB4F0B8, 0x14E1300B8), create_file_stub);
+				utils::hook::set(SELECT_VALUE_LANG(0x14208D260, 0x14E1300B8), create_file_stub);
 
 				const auto folder = get_custom_server_data_folder();
 				utils::io::write_file(std::format("{}\\server_url.txt", folder), custom_url);
 
-				utils::hook::jump(SELECT_VALUE_LANG(0x143593E7B, 0x14357A1FB), utils::hook::assemble(steam_storage_read_file_stub), true);
+				utils::hook::jump(SELECT_VALUE_LANG(0x14016FC2B, 0x14357A1FB), utils::hook::assemble(steam_storage_read_file_stub), true);
 			}
 
-			utils::hook::inject(SELECT_VALUE(0x1407D27AC, 0x140572AD6, 0x1407D23EC, 0x1405724C6) + 3, custom_url);
+			utils::hook::inject(SELECT_VALUE(0x1407D346C, 0x140572D76, 0x1407D23EC, 0x1405724C6) + 3, custom_url);
+		}
+
+		std::wstring parse_proxy_url(const std::string& url)
+		{
+			auto url_w = utils::string::convert(url);
+
+			while (url_w.ends_with(L"/"))
+			{
+				url_w.pop_back();
+			}
+
+			return url_w;
+		}
+
+		BOOL win_http_set_option_stub(HINTERNET handle, DWORD option, LPVOID buffer, DWORD buffer_length)
+		{
+			auto result = WinHttpSetOption(handle, option, buffer, buffer_length);
+
+			const auto url = var_net_proxy_url->current.get_string();
+			if (!url.empty())
+			{
+				auto url_w = parse_proxy_url(url);
+				WINHTTP_PROXY_INFO proxy = {};
+				proxy.dwAccessType = WINHTTP_ACCESS_TYPE_NAMED_PROXY;
+				proxy.lpszProxy = url_w.data();
+				result &= WinHttpSetOption(handle, WINHTTP_OPTION_PROXY, &proxy, sizeof(proxy));
+			}
+
+			if (result == 0)
+			{
+				console::error("error setting http proxy: %i", GetLastError());
+			}
+
+			return result;
+		}
+
+		BOOL win_http_crack_url_stub(LPCWSTR url, DWORD length, DWORD flags, LPURL_COMPONENTS url_components)
+		{
+			const auto domain = var_net_server_url_ovveride->current.get_string();
+			const auto pos = StrStrW(url, L"/tppstm");
+
+			std::wstring new_url;
+			if (!domain.empty() && !is_using_custom_server())
+			{
+				new_url = utils::string::convert(domain);
+				new_url += (url + (pos - url));
+				url = new_url.data();
+			}
+
+			return WinHttpCrackUrl(url, length, flags, url_components);
+		}
+
+		void patch_win_http()
+		{
+			utils::hook::nop(SELECT_VALUE(0x141A5C9F6, 0x1414AE416, 0x0, 0x0), 6);
+			utils::hook::call(SELECT_VALUE(0x141A5C9F6, 0x1414AE416, 0x0, 0x0), win_http_set_option_stub);
+
+			utils::hook::nop(SELECT_VALUE(0x141A5CA98, 0x1414AE4B8, 0x0, 0x0), 6);
+			utils::hook::call(SELECT_VALUE(0x141A5CA98, 0x1414AE4B8, 0x0, 0x0), win_http_crack_url_stub);
+		}
+
+		std::uint8_t* get_static_key()
+		{
+			static std::uint8_t static_key[16] =
+			{
+				0xD8, 0x89, 0x0A, 0xF0,
+				0x66, 0xC9, 0x6B, 0x40,
+				0xD7, 0x01, 0xAE, 0xFC,
+				0x43, 0x6F, 0xF9, 0xFE
+			};
+
+			return static_key;
+		}
+
+		std::string encrypt_data(const std::string& data, game::fox::ncl::NclDaemon* ncl_daemon)
+		{
+			utils::cryptography::blowfish blow;
+
+			auto key = ncl_daemon != nullptr
+				? ncl_daemon->key
+				: get_static_key();
+
+			blow.set_key(key, 16);
+			return blow.encrypt(data);
+		}
+
+		std::string decrypt_data(const std::string& data, game::fox::ncl::NclDaemon* ncl_daemon)
+		{
+			utils::cryptography::blowfish blow;
+
+			auto key = ncl_daemon != nullptr
+				? ncl_daemon->key
+				: get_static_key();
+
+			blow.set_key(key, 16);
+			return blow.decrypt(data);
+		}
+
+		std::string serialize_message(const nlohmann::json& data, game::fox::ncl::NclDaemon* ncl_daemon)
+		{
+			nlohmann::json message;
+
+			auto compress = false;
+
+			const auto use_crypto = ncl_daemon != nullptr && ncl_daemon->sessionKey.data != nullptr;
+
+			message["compress"] = compress;
+			message["session_crypto"] = use_crypto;
+			message["session_key"] = use_crypto ? ncl_daemon->sessionKey.data->buffer : "";
+
+			auto data_serialized = data.dump();
+			const auto original_size = data_serialized.size();
+
+			if (compress)
+			{
+				data_serialized = utils::compression::zlib::compress(data_serialized);
+			}
+
+			if (use_crypto)
+			{
+				data_serialized = encrypt_data(data_serialized, ncl_daemon);
+			}
+
+			if (compress && !use_crypto)
+			{
+				data_serialized = utils::cryptography::base64::encode(data_serialized);
+			}
+
+			message["data"] = data_serialized;
+			message["original_size"] = original_size;
+
+			auto message_serialized = message.dump();
+
+			message_serialized = encrypt_data(message_serialized, nullptr);
+			message_serialized = utils::string::replace(message_serialized, "+", "%2B");
+
+			return "httpMsg="s + message_serialized;
+		}
+
+		std::optional<nlohmann::json> deserialize_message(const std::string& data, game::fox::ncl::NclDaemon* ncl_daemon)
+		{
+			auto message_deserialized = utils::string::replace(data, "\r\n", "");
+			message_deserialized = decrypt_data(message_deserialized, nullptr);
+
+			auto message = nlohmann::json::parse(message_deserialized);
+
+			if (!message["data"].is_string())
+			{
+				return {message};
+			}
+
+			auto message_data = message["data"].get<std::string>();
+			const auto compressed = message["compress"].is_boolean() && message["compress"].get<bool>();
+			const auto session_crypto = message["session_crypto"].is_boolean() && message["session_crypto"].get<bool>();
+
+			if (session_crypto)
+			{
+				message_data = utils::string::replace(message_data, "\r\n", "");
+				message_data = decrypt_data(message_data, ncl_daemon);
+			}
+
+			if (compressed)
+			{
+				message_data = utils::compression::zlib::decompress(message_data);
+			}
+
+			message["data"] = nlohmann::json::parse(message_data);
+			return {message};
+		}
+	}
+
+	bool is_using_custom_server()
+	{
+		return custom_url[0] != 0;
+	}
+
+	std::optional<nlohmann::json> send_command(const std::string& endpoint, const nlohmann::json& data, bool use_session)
+	{
+		const auto ncl_daemon = *game::fox::ncl::NclDaemon_::s_instance;
+
+		const auto endpoint_id = game::fox::FoxStrHash32(endpoint.data(), std::strlen(endpoint.data()));
+		const auto url = game::fox::ncl::NclDaemon_::GetUrl(ncl_daemon, endpoint_id);
+		if (url == nullptr)
+		{
+			return {};
+		}
+
+		const auto crypto = use_session ? ncl_daemon : nullptr;
+		auto post_data = serialize_message(data, crypto);
+
+		utils::http::headers headers;
+		headers["Connection"] = "Keep-Alive";
+		headers["Content-Type"] = "application/x-www-form-urlencoded";
+
+		const auto proxy_url = var_net_proxy_url->current.get_string();
+		const auto result = utils::http::post_data(url->data->buffer, post_data, headers, {}, proxy_url);
+		if (!result.has_value())
+		{
+			return {};
+		}
+
+		const auto& value = result.value();
+		if (value.response_code != 200)
+		{
+			return {};
+		}
+
+		if (value.buffer.size() == 0)
+		{
+			return {};
+		}
+
+		const auto msg = deserialize_message(value.buffer, crypto);
+		if (msg.has_value() && msg->contains("data"))
+		{
+			return {msg->operator[]("data")};
+		}
+
+		return {};
+	}
+
+	class component final : public component_interface
+	{
+	public:
+		void pre_load() override
+		{
+			var_custom_server = vars::register_string("net_custom_server", "", vars::var_flag_saved | vars::var_flag_latched, "custom server url (empty = disabled)");
+			var_net_proxy_url = vars::register_string("net_proxy_url", "", vars::var_flag_saved, "proxy url for backend server (example: http://1.2.3.4:1234 empty = disabled)");
+			var_net_server_url_ovveride = vars::register_string("net_server_base_url_ovveride", "", vars::var_flag_saved, "override the backend server's base url (empty = disabled)");
+		}
+
+		void start() override
+		{
+			apply_custom_server();
+			patch_win_http();
 		}
 	};
 }

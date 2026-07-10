@@ -239,7 +239,7 @@ namespace matchmaking
 
 			if (request_disconnect)
 			{
-				utils::hook::invoke<void>(SELECT_VALUE_LANG(0x140891C80, 0x140891740), game::s_mgoMatchMakingManager.get(), 1);
+				utils::hook::invoke<void>(SELECT_VALUE_LANG(0x140892870, 0x140891740), game::s_mgoMatchMakingManager.get(), 1);
 			}
 
 			request_match_rotate = false;
@@ -289,12 +289,17 @@ namespace matchmaking
 
 		void update_kick_list()
 		{
-			set_lobby_data("kick_num", kicked_steam_ids.size());
-
+			const auto kick_num = std::min(16ull, kicked_steam_ids.size());
+			set_lobby_data("kick_num", kick_num);
+			
 			auto index = 0;
 			for (const auto& id : kicked_steam_ids)
 			{
 				set_lobby_data(utils::string::va("kicked_id_%d", index++), id);
+				if (index >= 16)
+				{
+					break;
+				}
 			}
 		}
 
@@ -372,6 +377,16 @@ namespace matchmaking
 			utils::hook::set(&steam_matchmaking->__vftable->SetLobbyData, set_lobby_data_stub);
 			//utils::hook::set(&steam_matchmaking->__vftable->GetLobbyData, get_lobby_data_stub);
 			utils::hook::set(&steam_matchmaking->__vftable->AddRequestLobbyListNumericalFilter, add_request_lobby_list_numerical_filter);
+		}
+
+		int atoi_stub(const char* str)
+		{
+			auto count = std::atoi(str);
+			if (count > 16)
+			{
+				count = 16;
+			}
+			return count;
 		}
 	}
 
@@ -487,8 +502,14 @@ namespace matchmaking
 				return;
 			}
 
-			create_lobby_cb_hook.create(SELECT_VALUE_LANG(0x144EF10B0, 0x1466D0C80), create_lobby_cb_stub);
-			create_lobby_hook.create(SELECT_VALUE_LANG(0x1405A1970, 0x1405A1380), create_lobby_stub);
+			create_lobby_cb_hook.create(SELECT_VALUE_LANG(0x1405A18E0, 0x1466D0C80), create_lobby_cb_stub);
+			create_lobby_hook.create(SELECT_VALUE_LANG(0x1405A1B60, 0x1405A1380), create_lobby_stub);
+
+			// cap kick_num to 16
+			utils::hook::nop(SELECT_VALUE_LANG(0x1405A29DE, 0x0), 6);
+			utils::hook::call(SELECT_VALUE_LANG(0x1405A29DE, 0x0), atoi_stub); 
+			utils::hook::nop(SELECT_VALUE_LANG(0x1405D4AEE, 0x0), 6);
+			utils::hook::call(SELECT_VALUE_LANG(0x1405D4AEE, 0x0), atoi_stub);
 
 			scheduler::once(hook_steam_matchmaking, scheduler::net);
 			scheduler::loop(run_frame, scheduler::session);

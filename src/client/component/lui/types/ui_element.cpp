@@ -50,14 +50,14 @@ namespace lui
 		this->id_ = "uielement";
 		this->type_ = UI_ELEMENT;
 #ifdef DEBUG
-		console::debug("+ create ui element (%i)\n", ++total_elems);
+		//console::debug("+ create ui element (%i)\n", ++total_elems);
 #endif
 	}
 
 	ui_element::~ui_element()
 	{
 #ifdef DEBUG
-		console::debug("- delete ui element (%i, %s)\n", --total_elems, this->id_.data());
+		//console::debug("- delete ui element (%i, %s)\n", --total_elems, this->id_.data());
 #endif
 		this->parent_.reset();
 		this->children_.clear();
@@ -358,7 +358,7 @@ namespace lui
 		}
 		else if ((current_pos.anchor & ANCHOR_RIGHT) != 0)
 		{
-			rect.left = parent_rect.right - current_state.width;
+			rect.left = parent_rect.right - current_state.width - current_pos.rect.right;
 		}
 
 		if ((current_pos.anchor & ANCHOR_RIGHT) != 0)

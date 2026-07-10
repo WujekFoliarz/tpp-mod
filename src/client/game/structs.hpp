@@ -178,19 +178,27 @@ namespace game
 
 	struct ISteamFriends;
 
+	typedef std::int16_t FriendsGroupID_t;
+
 	struct /*VFT*/ ISteamFriends_vtbl
 	{
 		const char* (__fastcall* GetPersonaName)(ISteamFriends* this_);
 		unsigned __int64(__fastcall* SetPersonaName)(ISteamFriends* this_, const char* pchPersonaName);
 		int(__fastcall* GetPersonaState)(ISteamFriends* this_);
 		int(__fastcall* GetFriendCount)(ISteamFriends* this_, int eFriendFlags);
-		steam_id(__fastcall* GetFriendByIndex)(ISteamFriends* this_, int iFriend, int iFriendFlags);
+		void(__fastcall* GetFriendByIndex)(ISteamFriends* this_, steam_id* out, int iFriend, int iFriendFlags);
 		int(__fastcall* GetFriendRelationship)(ISteamFriends* this_, steam_id steamIDFriend);
 		int(__fastcall* GetFriendPersonaState)(ISteamFriends* this_, steam_id steamIDFriend);
 		const char* (__fastcall* GetFriendPersonaName)(ISteamFriends* this_, steam_id steamIDFriend);
 		bool(__fastcall* GetFriendGamePlayed)(ISteamFriends* this_, steam_id steamIDFriend, void* pFriendGameInfo);
 		const char* (__fastcall* GetFriendPersonaNameHistory)(ISteamFriends* this_, steam_id steamIDFriend, int iPersonaName);
+		int(__fastcall* GetFriendSteamLevel)(ISteamFriends* this_, steam_id steamIDFriend);
 		const char* (__fastcall* GetPlayerNickname)(ISteamFriends* this_, steam_id steamIDFriend);
+		int(__fastcall* GetFriendsGroupCount)(ISteamFriends* this_);
+		FriendsGroupID_t(__fastcall* GetFriendsGroupIDByIndex)(ISteamFriends* this_, int iFG);
+		const char* (__fastcall* GetFriendsGroupName)(ISteamFriends* this_, FriendsGroupID_t friendsGroupID);
+		int(__fastcall* GetFriendsGroupMembersCount)(ISteamFriends* this_, FriendsGroupID_t friendsGroupID);
+		void(__fastcall* GetFriendsGroupMembersList)(ISteamFriends* this_, FriendsGroupID_t friendsGroupID, steam_id* pOutSteamIDMembers, int nMembersCount);
 		bool(__fastcall* HasFriend)(ISteamFriends* this_, steam_id steamIDFriend, int eFriendFlags);
 		int(__fastcall* GetClanCount)(ISteamFriends* this_);
 		steam_id(__fastcall* GetClanByIndex)(ISteamFriends* this_, int iClan);
@@ -401,6 +409,23 @@ namespace game
 
 		};
 
+		struct pfimpl
+		{
+			__int32 refCount;
+			__int32 pad;
+		};
+
+		struct SharedObject
+		{
+			struct vtable
+			{
+				void(__fastcall* __destructor)(SharedObject*);
+				void(__fastcall* Release)(SharedObject*);
+			};
+			vtable* __vftable;
+			pfimpl pf;
+		};
+
 		struct Quark
 		{
 			struct vtable
@@ -428,7 +453,7 @@ namespace game
 		struct Buffer
 		{
 			char* data;
-			void* a2;
+			char* a2;
 			size_t offset;
 			size_t size;
 			size_t capacity;
@@ -508,7 +533,7 @@ namespace game
 #pragma pack(push, 1)
 			struct FirstPartyAccount
 			{
-				__int64 id;
+				unsigned __int64 id;
 				char name[129];
 			};
 #pragma pack(pop)
@@ -1459,7 +1484,13 @@ namespace game
 			struct LayoutComponent;
 			struct Layout;
 			struct GraphState;
-			struct ModelNodeCommon;
+
+			struct ModelNodeCommon
+			{
+				char __pad0[108];
+				std::uint32_t hash;
+			};
+
 			struct Animation;
 
 			struct Font
@@ -1861,7 +1892,7 @@ namespace game
 			{
 				struct vtable
 				{
-
+					void(__fastcall* __destructor)(fox::ncl::NclMessageBase*);
 				};
 
 				vtable* __vftable;
@@ -1876,7 +1907,12 @@ namespace game
 			{
 				struct vtable
 				{
-
+					void(__fastcall* __destructor)(fox::ncl::NclJsonMessage*);
+					__int64(__fastcall* Serialize)(fox::ncl::NclJsonMessage*, fox::Buffer*);
+					__int64(__fastcall* Deserialize)(fox::ncl::NclJsonMessage*, fox::Buffer*);
+					char(__fastcall* Pack)(fox::ncl::NclJsonMessage*);
+					char(__fastcall* Unpack)(fox::ncl::NclJsonMessage*);
+					int(__fastcall* meth_06)(fox::ncl::NclJsonMessage*);
 				};
 
 				vtable* __vftable;
@@ -1888,7 +1924,7 @@ namespace game
 			{
 				struct vtable
 				{
-
+					void(__fastcall* __destructor)(fox::ncl::NclJsonMessageBase*);
 				};
 
 				vtable* __vftable;
@@ -1917,6 +1953,63 @@ namespace game
 				NclJsonMessage jsonMessage;
 				vtable* __vftable;
 				fox::String result;
+			};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+			struct NclDaemon
+			{
+				char __pad0[56];
+				char isLogin;
+				char __pad1[7];
+				fox::SharedString sessionKey;
+				unsigned char key[16];
+				char __pad2[96];
+				fox::String ip1;
+				fox::String ip2;
+			};
+#pragma pack(pop)
+
+			static_assert(offsetof(NclDaemon, key) == 72);
+
+			struct NclCryptBlowfish
+			{
+				struct vtable
+				{
+
+				};
+
+				fox::ncl::NclCryptBlowfish::vtable* __vftable;
+				char __pad0[4168];
+			};
+
+#pragma pack(push, 1)
+			struct NclHttpCodec
+			{
+				struct vtable
+				{
+					void(__fastcall* __destructor)(fox::ncl::NclHttpCodec*);
+					void(__fastcall* Release)(fox::ncl::NclHttpCodec*);
+					void(__fastcall* SetMessage)(fox::ncl::NclHttpCodec*, fox::ncl::NclJsonMessageBase*, fox::ncl::NclJsonMessageResult*);
+					void(__fastcall* Post)(fox::ncl::NclHttpCodec*);
+				};
+
+				fox::ncl::NclHttpCodec::vtable* __vftable;
+				void* ptr1;
+				fox::ncl::NclCryptBlowfish* blow;
+				fox::ncl::NclJsonMessageBase* messageBase;
+				fox::ncl::NclJsonMessageResult* messageResult;
+				void* ptr5;
+				void* callback;
+				void* ptr7;
+				void* ptr8;
+				char a1;
+				__int16 a2;
+				char __pad0[5];
+				void* ptr10;
+				int a3;
+				char __pad1[4];
+				void* ptr12;
 			};
 #pragma pack(pop)
 		}
@@ -2311,6 +2404,7 @@ namespace game
 						std::uint32_t stat_distribution : 6;
 						std::uint32_t skill : 7;
 						std::uint32_t face_gender : 10;
+						std::uint32_t unk : 2;
 					} fields;
 					std::uint32_t data;
 				};
@@ -2853,12 +2947,39 @@ namespace game
 			RequestDisplayImpl* requestDisplay;
 		};
 
-		struct FobTarget
+		struct ServerReceiveBase
 		{
-			char __pad0[16];
-			int a1;
+			struct vtable
+			{
+				void(__fastcall* __destructor)(tpp::net::ServerReceiveBase*);
+				void(__fastcall* Release)(tpp::net::ServerReceiveBase*);
+				void(__fastcall* Receive)(tpp::net::ServerReceiveBase*, void** ptr);
+				void(__fastcall* Success)(tpp::net::ServerReceiveBase*, void** ptr);
+				void(__fastcall* Failure)(tpp::net::ServerReceiveBase*, void** ptr);
+			};
+
+			vtable* __vftable;
+			fox::pfimpl pf;
+		};
+
+		struct ServerRequestBase
+		{
+			struct vtable
+			{
+
+			};
+
+			tpp::net::ServerRequestBase::vtable* __vftable;
+			fox::ncl::NclHttpCodec* httpCodec;
+			int state;
+			int mode;
 			fox::StringId unkString;
-			char __pad1[8];
+			int a5;
+			char a6;
+		};
+
+		struct FobTarget : ServerRequestBase
+		{
 			mbm::PlayerBasicInfo* playerInfos;
 			char __pad2[8];
 			short maxPlayers;
@@ -5157,10 +5278,10 @@ namespace game
 			void* (__fastcall* SetVisible2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*, bool);
 			void* (__fastcall* IsVisible1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*);
 			void* (__fastcall* IsVisible2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*);
-			void* (__fastcall* SetAlpha1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*, float);
-			void* (__fastcall* SetAlpha2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*, float);
-			void* (__fastcall* GetAlpha3)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*);
-			void* (__fastcall* GetAlpha4)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*);
+			void (__fastcall* SetAlpha1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*, float);
+			void (__fastcall* SetAlpha2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*, float);
+			float (__fastcall* GetAlpha1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*);
+			float (__fastcall* GetAlpha2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*);
 			void* (__fastcall* SetColorRGB1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*, fox::Rgba8);
 			void* (__fastcall* SetColorRGB2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*, fox::Rgba8);
 			void* (__fastcall* SetColorRGB3)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*, fox::Color*);
@@ -5295,6 +5416,7 @@ namespace game
 			void* (__fastcall* SetTextUnitsForModelNodeText)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeText*, fox::ui::TextUnit*, unsigned int);
 			void* (__fastcall* CreateBoxText)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeText*, fox::ui::TextUnit*, unsigned int, char const*, bool, bool);
 			void* (__fastcall* CreateScrollBoxText)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeText*, fox::ui::TextUnit*, unsigned int, char const*);
+			void* pad5[5];
 			void* (__fastcall* GetLangText1)(fox::uix::impl::UixUtilityImpl* this_, fox::StringId);
 			void* (__fastcall* GetLangText2)(fox::uix::impl::UixUtilityImpl* this_, fox::StringId);
 			void* (__fastcall* StartTextScroll)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeText*);
@@ -5333,7 +5455,7 @@ namespace game
 			void* (__fastcall* RotEularRadianToDegree)(fox::uix::impl::UixUtilityImpl* this_, Vectormath::Aos::Vector3*);
 			void* (__fastcall* RotEularDegreeToRadian)(fox::uix::impl::UixUtilityImpl* this_, Vectormath::Aos::Vector3*);
 			void* (__fastcall* GetPathIdFromChar)(fox::uix::impl::UixUtilityImpl* this_, char const*);
-			void* (__fastcall* GetPaletteColor)(fox::uix::impl::UixUtilityImpl* this_, fox::StringId);
+			fox::Color* (__fastcall* GetPaletteColor)(fox::uix::impl::UixUtilityImpl* this_, fox::Color*, fox::StringId);
 		};
 
 		struct UixUtilityImpl_vtbl_tpp
@@ -5404,28 +5526,30 @@ namespace game
 			void* (__fastcall* SendVisibleWindowMessage)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::WindowInterface*, bool);
 			void* (__fastcall* SendConnectWindowMessage)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::WindowInterface*, fox::ui::Model*, fox::ui::ModelNode*);
 			void* (__fastcall* GetChildWindowInterface)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::WindowInterface const*, fox::StringId);
-			void* (__fastcall* GetLayout1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Layout const*, fox::StringId);
-			void* (__fastcall* GetLayout2)(fox::uix::impl::UixUtilityImpl* this_, void* const, fox::StringId);
-			void* (__fastcall* GetLayout3)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::WindowInterface const*, fox::StringId);
+			void* pad1[2];
+			fox::ui::Layout* (__fastcall* GetLayout1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Layout const*, fox::StringId);
+			fox::ui::Layout* (__fastcall* GetLayout2)(fox::uix::impl::UixUtilityImpl* this_, void* const, fox::StringId);
+			fox::ui::Layout* (__fastcall* GetLayout3)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::WindowInterface const*, fox::StringId);
 			void* (__fastcall* IsHaveLayout)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Layout const*, fox::StringId);
-			void* (__fastcall* GetModel)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Layout const*, fox::StringId);
+			void* pad2[1];
+			fox::ui::Model* (__fastcall* GetModel)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Layout const*, fox::StringId);
 			void* (__fastcall* GetAnimation1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Model const*, fox::StringId);
 			void* (__fastcall* GetAnimation2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Layout const*, fox::StringId);
 			void* (__fastcall* IsHaveModelNodeCommon)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Model const*, fox::StringId);
 			void* (__fastcall* GetModelNodeCommon)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Model const*, fox::StringId);
 			void* (__fastcall* GetModelNodeText)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Model const*, fox::StringId);
-			void* (__fastcall* GetModelNodeMesh)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Model const*, fox::StringId);
+			fox::ui::ModelNodeMesh* (__fastcall* GetModelNodeMesh)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Model const*, fox::StringId);
 			void* (__fastcall* GetModelNodeLine)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Model const*, fox::StringId);
 			void* (__fastcall* GetOrthogonalProjectionScaleFromModelComponentCamera)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::Model*);
-			void* pad[6];
+			void* pad3[3];
 			void* (__fastcall* SetVisible1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*, bool);
 			void* (__fastcall* SetVisible2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*, bool);
 			void* (__fastcall* IsVisible1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*);
 			void* (__fastcall* IsVisible2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*);
-			void* (__fastcall* SetAlpha1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*, float);
-			void* (__fastcall* SetAlpha2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*, float);
-			void* (__fastcall* GetAlpha3)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*);
-			void* (__fastcall* GetAlpha4)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*);
+			void (__fastcall* SetAlpha1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*, float);
+			void (__fastcall* SetAlpha2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*, float);
+			float (__fastcall* GetAlpha1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*);
+			float (__fastcall* GetAlpha2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*);
 			void* (__fastcall* SetColorRGB1)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*, fox::Rgba8);
 			void* (__fastcall* SetColorRGB2)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::LayoutComponent*, fox::Rgba8);
 			void* (__fastcall* SetColorRGB3)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNode*, fox::Color*);
@@ -5516,7 +5640,7 @@ namespace game
 			void* (__fastcall* SetShaderBaseTexUvRepeat)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeMesh*, float, float);
 			void* (__fastcall* SetShaderMaskTexUvRepeat)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeMesh*, float, float);
 			void* (__fastcall* SetShaderScreenTexUvRepeat)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeMesh*, float, float);
-			void* pad2[3];
+			void* pad4[3];
 			void* (__fastcall* SetVertexTranslate)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeMesh*, unsigned int, Vectormath::Aos::Vector3*, Vectormath::Aos::Vector3*);
 			void* (__fastcall* FindWindow_)(fox::uix::impl::UixUtilityImpl* this_, fox::StringId);
 			void* (__fastcall* EnableAllInheritance)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::WindowInterface const*);
@@ -5560,6 +5684,7 @@ namespace game
 			void* (__fastcall* SetTextUnitsForModelNodeText)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeText*, fox::ui::TextUnit*, unsigned int);
 			void* (__fastcall* CreateBoxText)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeText*, fox::ui::TextUnit*, unsigned int, char const*, bool, bool);
 			void* (__fastcall* CreateScrollBoxText)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeText*, fox::ui::TextUnit*, unsigned int, char const*);
+			void* pad5[5];
 			void* (__fastcall* GetLangText1)(fox::uix::impl::UixUtilityImpl* this_, fox::StringId);
 			void* (__fastcall* GetLangText2)(fox::uix::impl::UixUtilityImpl* this_, fox::StringId);
 			void* (__fastcall* StartTextScroll)(fox::uix::impl::UixUtilityImpl* this_, fox::ui::ModelNodeText*);
@@ -5598,7 +5723,7 @@ namespace game
 			void* (__fastcall* RotEularRadianToDegree)(fox::uix::impl::UixUtilityImpl* this_, Vectormath::Aos::Vector3*);
 			void* (__fastcall* RotEularDegreeToRadian)(fox::uix::impl::UixUtilityImpl* this_, Vectormath::Aos::Vector3*);
 			void* (__fastcall* GetPathIdFromChar)(fox::uix::impl::UixUtilityImpl* this_, char const*);
-			void* (__fastcall* GetPaletteColor)(fox::uix::impl::UixUtilityImpl* this_, fox::StringId);
+			fox::Color* (__fastcall* GetPaletteColor)(fox::uix::impl::UixUtilityImpl* this_, fox::Color*, fox::StringId);
 		};
 
 		union UixUtilityImpl_vtbl

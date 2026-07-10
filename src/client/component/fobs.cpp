@@ -1,8 +1,6 @@
 #include <std_include.hpp>
 #include "loader/component_loader.hpp"
 
-#include "game/game.hpp"
-
 #include "fobs.hpp"
 #include "vars.hpp"
 #include "console.hpp"
@@ -160,6 +158,8 @@ namespace fobs
 		utils::hook::detour fob_mission2_callback_update_hook;
 
 		utils::concurrency::container<state_t> state;
+		
+		utils::concurrency::container<custom_fob_targets_t> custom_fob_targets;
 
 		void update_lobby(state_t& s)
 		{
@@ -831,9 +831,42 @@ namespace fobs
 			game::tpp::net::DisplayName_::GetDisplayName(fob_target->displayName2);
 		}
 
+		void add_custom_targets(const std::string& type, game::tpp::net::FobTarget* fob_target)
+		{
+			auto i = 0;
+			for (; i < fob_target->maxPlayers; i++)
+			{
+				if (fob_target->playerInfos[i].owner_account.id == 0)
+				{
+					break;
+				}
+			}
+
+			custom_fob_targets.access([&](custom_fob_targets_t& types)
+			{
+				auto& targets = types[type];
+				for (auto& target : targets)
+				{
+					if (i >= fob_target->maxPlayers)
+					{
+						break;
+					}
+
+					std::memcpy(&fob_target->playerInfos[i], &target, sizeof(game::tpp::mbm::PlayerBasicInfo));
+					game::tpp::net::DisplayName_::AddList(fob_target->displayName1, &fob_target->playerInfos[i].owner_account);
+					++i;
+				}
+			});
+		}
+
 		void fob_target_receive_enemy_basic_info_stub(game::tpp::net::FobTarget* fob_target, game::tpp::net::CmdGetFobTargetListResult<0>* list)
 		{
 			std::memset(fob_target->playerInfos, 0, sizeof(game::tpp::mbm::PlayerBasicInfo) * fob_target->maxPlayers);
+
+			const auto _0 = gsl::finally([&]
+			{
+				add_custom_targets(list->type.data->buffer, fob_target);
+			});
 
 			if (list->type.data->buffer != "CHALLENGE"s)
 			{
@@ -950,6 +983,60 @@ namespace fobs
 		}
 	}
 
+	void add_custom_fob_target(const std::string& type, const game::tpp::mbm::PlayerBasicInfo& info)
+	{
+		custom_fob_targets.access([&](custom_fob_targets_t& types)
+		{
+			auto& targets = types[type];
+			for (auto& target : targets)
+			{
+				if (target.owner_account.id == info.owner_account.id)
+				{
+					return;
+				}
+			}
+
+			targets.emplace_back(info);
+		});
+	}
+
+	void remove_custom_fob_target(const std::string& type, const std::uint64_t steam_id)
+	{
+		custom_fob_targets.access([&](custom_fob_targets_t& types)
+		{
+			auto& targets = types[type];
+			for (auto i = targets.begin(); i != targets.end(); ++i)
+			{
+				if (i->owner_account.id == steam_id)
+				{
+					i = targets.erase(i);
+					return;
+				}
+			}
+		});
+	}
+
+	void clear_custom_fob_targets()
+	{
+		custom_fob_targets.access([&](custom_fob_targets_t& types)
+		{
+			types.clear();
+		});
+	}
+
+	void access_custom_fob_targets(const std::function<void(custom_fob_targets_t&)> callback)
+	{
+		custom_fob_targets.access(callback);
+	}
+
+	std::uint32_t get_own_player_id()
+	{
+		return state.access<std::uint32_t>([&](state_t& s)
+		{
+			return s.own_lobby_info.player_id;
+		});
+	}
+
 	class component final : public component_interface
 	{
 	public:
@@ -979,22 +1066,22 @@ namespace fobs
 				return;
 			}
 
-			cmd_get_fob_target_list_result_unpack_hook.create(SELECT_VALUE_LANG(0x140816F40, 0x140816B90), cmd_get_fob_target_list_result_unpack_stub);
-			cmd_get_fob_target_list_option_pack_hook.create(SELECT_VALUE_LANG(0x145B1AE00, 0x1474F31B0), cmd_get_fob_target_list_option_pack_stub);
+			cmd_get_fob_target_list_result_unpack_hook.create(SELECT_VALUE_LANG(0x140817CB0, 0x140816B90), cmd_get_fob_target_list_result_unpack_stub);
+			cmd_get_fob_target_list_option_pack_hook.create(SELECT_VALUE_LANG(0x140817B60, 0x1474F31B0), cmd_get_fob_target_list_option_pack_stub);
 
-			cmd_set_security_challenge_option_pack_hook.create(SELECT_VALUE_LANG(0x145BAE010, 0x14758B7D0), cmd_set_security_challenge_option_pack_stub);
-			cmd_set_security_challenge_result_unpack_hook.create(SELECT_VALUE_LANG(0x145B22420, 0x1474FB2E0), cmd_set_security_challenge_result_unpack_stub);
+			cmd_set_security_challenge_option_pack_hook.create(SELECT_VALUE_LANG(0x140858A70, 0x14758B7D0), cmd_set_security_challenge_option_pack_stub);
+			cmd_set_security_challenge_result_unpack_hook.create(SELECT_VALUE_LANG(0x140849F50, 0x1474FB2E0), cmd_set_security_challenge_result_unpack_stub);
 
-			cmd_get_playerlist_result_unpack_hook.create(SELECT_VALUE_LANG(0x1407E2820, 0x1407E2450), cmd_get_playerlist_result_unpack_stub);
-			cmd_set_currentplayer_result_unpack_hook.create(SELECT_VALUE_LANG(0x1459CDBC0, 0x147414460), cmd_set_currentplayer_result_unpack_stub);
-			cmd_sync_mother_base_option_pack_hook.create(SELECT_VALUE_LANG(0x145B05460, 0x1474DA240), cmd_sync_mother_base_option_pack_stub);
-			cmd_get_own_fob_list_result_unpack_hook.create(SELECT_VALUE_LANG(0x140845C80, 0x1408458B0), cmd_get_own_fob_list_result_unpack_stub);
-			cmd_sync_soldier_bin_pack_hook.create(SELECT_VALUE_LANG(0x145B0B710, 0x1474E11F0), cmd_sync_soldier_bin_pack_stub);
-			cmd_sync_resource_result_unpack_hook.create(SELECT_VALUE_LANG(0x145B09E50, 0x1474DEB10), cmd_sync_resource_result_unpack_stub);
+			cmd_get_playerlist_result_unpack_hook.create(SELECT_VALUE_LANG(0x1407E3350, 0x1407E2450), cmd_get_playerlist_result_unpack_stub);
+			cmd_set_currentplayer_result_unpack_hook.create(SELECT_VALUE_LANG(0x1407E3B50, 0x147414460), cmd_set_currentplayer_result_unpack_stub);
+			cmd_sync_mother_base_option_pack_hook.create(SELECT_VALUE_LANG(0x14080F7B0, 0x1474DA240), cmd_sync_mother_base_option_pack_stub);
+			cmd_get_own_fob_list_result_unpack_hook.create(SELECT_VALUE_LANG(0x140846BD0, 0x1408458B0), cmd_get_own_fob_list_result_unpack_stub);
+			cmd_sync_soldier_bin_pack_hook.create(SELECT_VALUE_LANG(0x1408132A0, 0x1474E11F0), cmd_sync_soldier_bin_pack_stub);
+			cmd_sync_resource_result_unpack_hook.create(SELECT_VALUE_LANG(0x140812AA0, 0x1474DEB10), cmd_sync_resource_result_unpack_stub);
 
-			fob_target_receive_enemy_basic_info_hook.create(SELECT_VALUE_LANG(0x1459F5940, 0x147443580), fob_target_receive_enemy_basic_info_stub);
+			fob_target_receive_enemy_basic_info_hook.create(SELECT_VALUE_LANG(0x1407EF730, 0x147443580), fob_target_receive_enemy_basic_info_stub);
 
-			fob_mission2_callback_update_hook.create(SELECT_VALUE_LANG(0x1416951C0, 0x141695310), fob_mission2_callback_update_stub);
+			fob_mission2_callback_update_hook.create(SELECT_VALUE_LANG(0x141694330, 0x141695310), fob_mission2_callback_update_stub);
 
 			scheduler::loop(run_frame, scheduler::net);
 		}

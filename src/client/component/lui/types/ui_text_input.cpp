@@ -355,13 +355,19 @@ namespace lui
 			return;
 		}
 
-		if (params.is_char && this->handle_char(params.key))
+		if (params.is_char)
 		{
-			this->send_input_event("input");
+			if (this->handle_char(params.key))
+			{
+				this->send_input_event("input");
+			}
 		}
-		else if (!params.is_mousewheel && params.is_down && this->handle_key(params.key))
+		else if (!params.is_mousewheel && params.is_down)
 		{
-			this->send_input_event("input");
+			if (this->handle_key(params.key))
+			{
+				this->send_input_event("input");
+			}
 		}
 	}
 
@@ -405,10 +411,12 @@ namespace lui
 		if (!focused && this->has_focus())
 		{
 			ui_text_input::current_focused_id = -1;
+			this->dispatch_event("unfocused");
 		}
 		else if (focused)
 		{
 			ui_text_input::current_focused_id = this->input_id_;
+			this->dispatch_event("focused");
 		}
 	}
 
