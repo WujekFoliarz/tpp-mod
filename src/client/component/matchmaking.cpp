@@ -7,6 +7,7 @@
 #include "scheduler.hpp"
 #include "console.hpp"
 #include "matchmaking.hpp"
+#include "custom_maps.hpp"
 
 #include "text_chat/defs.hpp"
 #include "text_chat/ui.hpp"
@@ -14,20 +15,30 @@
 #include <utils/hook.hpp>
 #include <utils/string.hpp>
 
+#define MATCH_VERSION 170
+
 namespace matchmaking
 {
 	namespace
 	{
-		utils::hook::detour create_lobby_cb_hook;
-		utils::hook::detour create_lobby_hook;
-
-		game::match_settings_t match_settings{};
-
 		vars::var_ptr var_match_enable_tweaks;
 		vars::var_ptr var_match_min_players;
 		vars::var_ptr var_match_max_players;
 		vars::var_ptr var_match_briefing_time;
 		vars::var_ptr var_match_password;
+		vars::var_ptr var_match_restricted;
+
+		utils::hook::detour create_lobby_cb_hook;
+		utils::hook::detour create_lobby_hook;
+		utils::hook::detour join_lobby_cb_hook;
+		utils::hook::detour start_transition_hook;
+		utils::hook::detour match_start_hook;
+
+		game::match_settings_t match_settings{};
+
+		std::atomic_bool request_match_start = false;
+		std::atomic_bool request_match_rotate = false;
+		std::atomic_bool request_disconnect = false;
 
 		struct match_field_t
 		{
@@ -44,21 +55,25 @@ namespace matchmaking
 
 		std::unordered_set<std::uint64_t> kicked_steam_ids;
 
+		struct callback_t
+		{
+			std::uint32_t type;
+			std::function<void(game::mgo_match_t*, const game::steam_id)> callback;
+		};
+
+		std::vector<callback_t> event_callbacks;
+
+		game::steam_id last_requested_lobby;
+
 #define DEFINE_MATCH_FIELD(__struct__, __name__) \
 		{#__name__, match_field_t(sizeof(__struct__::__name__), offsetof(__struct__, __name__))}
 
 		std::unordered_map<std::string, match_field_t> match_settings_fields =
 		{
 			DEFINE_MATCH_FIELD(game::match_settings_t, match_type),
-			DEFINE_MATCH_FIELD(game::match_settings_t, match_rule),
-			DEFINE_MATCH_FIELD(game::match_settings_t, match_variant),
-			DEFINE_MATCH_FIELD(game::match_settings_t, map_id),
-			DEFINE_MATCH_FIELD(game::match_settings_t, day_night),
 			DEFINE_MATCH_FIELD(game::match_settings_t, skill_level),
 			DEFINE_MATCH_FIELD(game::match_settings_t, cheat_rate),
 			DEFINE_MATCH_FIELD(game::match_settings_t, member_max),
-			DEFINE_MATCH_FIELD(game::match_settings_t, unique_char),
-			DEFINE_MATCH_FIELD(game::match_settings_t, walker_gear),
 			DEFINE_MATCH_FIELD(game::match_settings_t, rank),
 			DEFINE_MATCH_FIELD(game::match_settings_t, has_password),
 			DEFINE_MATCH_FIELD(game::match_settings_t, host_comment),
@@ -100,13 +115,31 @@ namespace matchmaking
 
 		void update_match_settings()
 		{
-			const auto match_container = game::s_mgoMatchMakingManager->match_container;
+			const auto match_container = game::s_mgoMatchMakingManager->match_container; 
 			if (match_container == nullptr || match_container->match == nullptr)
 			{
 				return;
 			}
 
-			std::memcpy(&match_container->match->match_settings, &match_settings, sizeof(game::match_settings_t));
+			const auto match = match_container->match;
+			if (match_settings.rules.pl_current_match < 0)
+			{
+				match_settings.rules.pl_current_match = 0;
+			}
+
+			if (match_settings.rules.pl_current_match > 4)
+			{
+				match_settings.rules.pl_current_match = 4;
+			}
+
+			match_settings.map_id = match_settings.rules.slots[match_settings.rules.pl_current_match].m_map_id;
+			match_settings.match_rule = match_settings.rules.slots[match_settings.rules.pl_current_match].m_match_rule;
+			match_settings.walker_gear = match_settings.rules.slots[match_settings.rules.pl_current_match].m_walker_gear;
+			match_settings.day_night = match_settings.rules.slots[match_settings.rules.pl_current_match].m_dn;
+			match_settings.match_variant = match_settings.rules.slots[match_settings.rules.pl_current_match].m_variant;
+			match_settings.unique_char = match_settings.rules.slots[match_settings.rules.pl_current_match].m_unique_char;
+
+			std::memcpy(&match->match_settings, &match_settings, sizeof(game::match_settings_t));
 		}
 
 		void create_lobby_stub(game::mgo_match_t* match, game::match_settings_t* settings)
@@ -154,16 +187,25 @@ namespace matchmaking
 			return 0;
 		}
 
-		void set_slot_field(int slot_number, const std::string& field, const int value)
+		void set_slot_field(int slot_number, const std::string& field, const std::string& value)
 		{
-			const auto iter = match_slot_fields.find(field);
-			if (slot_number >= 5 || iter == match_slot_fields.end())
+			if (field == "m_map_name")
 			{
-				console::warn("field \"%s\" does not exist\n", field.data());
-				return;
+				match_settings.rules.slots[slot_number].m_map_id = custom_maps::get_map_id(value);
+				printf("set map id %s %i\n", value.data(), match_settings.rules.slots[slot_number].m_map_id);
+			}
+			else
+			{
+				const auto iter = match_slot_fields.find(field);
+				if (slot_number >= 5 || iter == match_slot_fields.end())
+				{
+					console::warn("field \"%s\" does not exist\n", field.data());
+					return;
+				}
+
+				set_field(&match_settings.rules.slots[slot_number], iter->second, std::atoi(value.data()));
 			}
 
-			set_field(&match_settings.rules.slots[slot_number], iter->second, value);
 			update_match_settings();
 		}
 
@@ -192,10 +234,6 @@ namespace matchmaking
 			set_field(&match_settings.rules, iter->second, value);
 			update_match_settings();
 		}
-
-		std::atomic_bool request_match_start = false;
-		std::atomic_bool request_match_rotate = false;
-		std::atomic_bool request_disconnect = false;
 
 		void run_frame()
 		{
@@ -239,52 +277,28 @@ namespace matchmaking
 
 			if (request_disconnect)
 			{
-				utils::hook::invoke<void>(SELECT_VALUE_LANG(0x140892870, 0x140891740), game::s_mgoMatchMakingManager.get(), 1);
+				utils::hook::invoke<void>(SELECT_VALUE_LANG(0x140892850, 0x0), game::s_mgoMatchMakingManager.get(), 1);
 			}
 
 			request_match_rotate = false;
 			request_disconnect = false;
 		}
 
-		game::steam_id get_current_steam_id()
+		void run_callbacks(const std::uint32_t type, game::mgo_match_t* match, const game::steam_id lobby_id)
 		{
-			game::steam_id result{};
-			const auto steam_user = (*game::SteamUser)();
-			steam_user->__vftable->GetSteamID(steam_user, &result);
-			return result;
-		}
-
-		void set_lobby_data(const std::string& key, const std::string& value)
-		{
-			static const auto current_steam_id = get_current_steam_id();
 			const auto match_container = game::s_mgoMatchMakingManager->match_container;
-			if (match_container == nullptr || 
-				match_container->match->lobby_id.bits == 0 || 
-				match_container->match->lobby_owner.bits != current_steam_id.bits)
+			if (match_container == nullptr || match_container->match == nullptr)
 			{
 				return;
 			}
 
-			const auto steam_matchmaking = (*game::SteamMatchmaking)();
-			const auto res = steam_matchmaking->__vftable->SetLobbyData(steam_matchmaking, match_container->match->lobby_id, key.data(), value.data());
-			console::debug("[SteamMatchmaking] SetLobbyData(%s, %s) = %i\n", key.data(), value.data(), res);
-		}
-
-		void set_lobby_data(const std::string& key, const std::uint64_t value)
-		{
-			set_lobby_data(key, utils::string::va("%llu", value));
-		}
-
-		const char* get_lobby_data(const std::string& key)
-		{
-			const auto match_container = game::s_mgoMatchMakingManager->match_container;
-			if (match_container == nullptr)
+			for (auto& callback : event_callbacks)
 			{
-				return "";
+				if (callback.type == type)
+				{
+					callback.callback(match, lobby_id);
+				}
 			}
-
-			const auto steam_matchmaking = (*game::SteamMatchmaking)();
-			return steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking, match_container->match->lobby_id, key.data());
 		}
 
 		void update_kick_list()
@@ -305,7 +319,7 @@ namespace matchmaking
 
 		void update_match_password()
 		{
-			const auto password = var_match_password->current.get_string();
+			const auto& password = var_match_password->current.get_string();
 			if (password.empty())
 			{
 				set_lobby_data("has_password", 0);
@@ -318,19 +332,52 @@ namespace matchmaking
 			}
 		}
 
-		void* create_lobby_cb_stub(void* a1, game::steam_id lobby_id)
+		void create_lobby_cb_stub(game::mgo_match_t* match, game::steam_id lobby_id)
 		{
-			printf("[SteamMatchmaking] Created lobby %llu\n", lobby_id.bits);
-			const auto res = create_lobby_cb_hook.invoke<void*>(a1, lobby_id);
-			update_kick_list();
-			update_match_password();
-			return res;
+			console::info("[SteamMatchmaking] Created lobby %llu\n", lobby_id.bits);
+			create_lobby_cb_hook.invoke<void>(match, lobby_id);
+			run_callbacks(event_create_lobby, match, lobby_id);
+		}
+
+		void join_lobby_cb_stub(game::mgo_match_t* match, game::steam_id lobby_id)
+		{
+			join_lobby_cb_hook.invoke<void>(match, lobby_id);
+			run_callbacks(event_join_lobby, match, lobby_id);
+		}
+
+		void start_transition_stub()
+		{
+			start_transition_hook.invoke<void>();
+
+			const auto match_container = game::s_mgoMatchMakingManager->match_container;
+			if (match_container == nullptr || match_container->match == nullptr)
+			{
+				return;
+			}
+
+			run_callbacks(event_start_transition, match_container->match, match_container->match->lobby_id);
+		}
+
+		char match_start_stub(__int64 a1, __int64 a2, unsigned __int8 a3)
+		{
+			const auto result = match_start_hook.invoke<char>(a1, a2, a3);
+
+			const auto match_container = game::s_mgoMatchMakingManager->match_container;
+			if (match_container == nullptr || match_container->match == nullptr)
+			{
+				return result;
+			}
+
+			run_callbacks(event_match_start, match_container->match, match_container->match->lobby_id);
+
+			return result;
 		}
 
 		game::ISteamMatchmaking_vtbl steam_matchmaking_vtbl{};
 		bool request_lobby_data_stub(game::ISteamMatchmaking* this_, game::steam_id lobby_id)
 		{
 			console::debug("[SteamMatchmaking] RequestLobbyData %lli\n", lobby_id.bits);
+			last_requested_lobby = lobby_id;
 			return steam_matchmaking_vtbl.RequestLobbyData(this_, lobby_id);
 		}
 
@@ -350,6 +397,11 @@ namespace matchmaking
 
 		bool set_lobby_data_stub(game::ISteamMatchmaking* this_, game::steam_id lobby_id, const char* key, const char* value)
 		{
+			if (var_match_restricted->current.enabled() && key == "version"s)
+			{
+				value = utils::string::va("%i", MATCH_VERSION);
+			}
+
 			console::debug("[SteamMatchmaking] SetLobbyData %s %s\n", key, value);
 			return steam_matchmaking_vtbl.SetLobbyData(this_, lobby_id, key, value);
 		}
@@ -363,7 +415,16 @@ namespace matchmaking
 		void add_request_lobby_list_numerical_filter(game::ISteamMatchmaking* this_, const char* key, int value, int compare)
 		{
 			console::debug("[SteamMatchmaking] AddRequestLobbyListNumericalFilter %s %i %i\n", key, value, compare);
-			steam_matchmaking_vtbl.AddRequestLobbyListNumericalFilter(this_, key, value, compare);
+
+			if (key == "version"s)
+			{
+				steam_matchmaking_vtbl.AddRequestLobbyListNumericalFilter(this_, key, MATCH_VERSION, -2);
+				steam_matchmaking_vtbl.AddRequestLobbyListNumericalFilter(this_, key, value, 2);
+			}
+			else
+			{
+				steam_matchmaking_vtbl.AddRequestLobbyListNumericalFilter(this_, key, value, compare);
+			}
 		}
 
 		void hook_steam_matchmaking()
@@ -377,16 +438,6 @@ namespace matchmaking
 			utils::hook::set(&steam_matchmaking->__vftable->SetLobbyData, set_lobby_data_stub);
 			//utils::hook::set(&steam_matchmaking->__vftable->GetLobbyData, get_lobby_data_stub);
 			utils::hook::set(&steam_matchmaking->__vftable->AddRequestLobbyListNumericalFilter, add_request_lobby_list_numerical_filter);
-		}
-
-		int atoi_stub(const char* str)
-		{
-			auto count = std::atoi(str);
-			if (count > 16)
-			{
-				count = 16;
-			}
-			return count;
 		}
 	}
 
@@ -435,6 +486,88 @@ namespace matchmaking
 		steam_matchmaking->__vftable->RequestLobbyData(steam_matchmaking, lobby_id);
 	}
 
+	void register_callback(const std::uint32_t type, const std::function<void(game::mgo_match_t*, const game::steam_id)> callback)
+	{
+		callback_t c{};
+		c.type = type;
+		c.callback = callback;
+		event_callbacks.emplace_back(c);
+	}
+
+	game::steam_id get_current_steam_id()
+	{
+		game::steam_id result{};
+		const auto steam_user = (*game::SteamUser)();
+		if (steam_user == nullptr)
+		{
+			return {};
+		}
+
+		steam_user->__vftable->GetSteamID(steam_user, &result);
+		return result;
+	}
+
+	void set_lobby_data(const std::string& key, const std::string& value)
+	{
+		static const auto current_steam_id = get_current_steam_id();
+		const auto match_container = game::s_mgoMatchMakingManager->match_container;
+		if (match_container == nullptr ||
+			match_container->match->lobby_id.bits == 0 ||
+			match_container->match->lobby_owner.bits != current_steam_id.bits)
+		{
+			return;
+		}
+
+		const auto steam_matchmaking = (*game::SteamMatchmaking)();
+		const auto res = steam_matchmaking->__vftable->SetLobbyData(steam_matchmaking, match_container->match->lobby_id, key.data(), value.data());
+		console::debug("[SteamMatchmaking] SetLobbyData(%s, %s) = %i\n", key.data(), value.data(), res);
+	}
+
+	void set_lobby_data(const std::string& key, const std::uint64_t value)
+	{
+		set_lobby_data(key, utils::string::va("%llu", value));
+	}
+
+	const char* get_lobby_data(const std::string& key)
+	{
+		const auto match_container = game::s_mgoMatchMakingManager->match_container;
+		if (match_container == nullptr)
+		{
+			return "";
+		}
+
+		const auto steam_matchmaking = (*game::SteamMatchmaking)();
+		return steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking, match_container->match->lobby_id, key.data());
+	}
+
+	game::steam_id get_last_requested_lobby()
+	{
+		return last_requested_lobby;
+	}
+
+	game::mgo_match_t* get_match()
+	{
+		const auto match_container = game::s_mgoMatchMakingManager->match_container;
+		if (match_container == nullptr || match_container->match == nullptr)
+		{
+			return nullptr;
+		}
+
+		return match_container->match;
+	}
+
+	bool is_host()
+	{
+		const auto match = get_match();
+		if (match == nullptr)
+		{
+			return false;
+		}
+
+		const auto self_id = get_current_steam_id();
+		return match->lobby_owner.bits == self_id.bits;
+	}
+
 	class component final : public component_interface
 	{
 	public:
@@ -445,11 +578,14 @@ namespace matchmaking
 				return;
 			}
 
+			custom_maps::register_maps();
+
 			var_match_enable_tweaks = vars::register_bool("match_enable_tweaks", false, vars::var_flag_saved, "enable match settings tweaks");
 			var_match_min_players = vars::register_int("match_min_players", 2, 0, 16, vars::var_flag_saved, "match minimum players override");
 			var_match_max_players = vars::register_int("match_max_players", 16, 0, 16, vars::var_flag_saved, "match maximum players override");
 			var_match_briefing_time = vars::register_int("match_briefing_time", 60, 0, 600, vars::var_flag_saved, "match briefing time override (seconds)");
 			var_match_password = vars::register_string("match_password", "", vars::var_flag_saved, "match password");
+			var_match_restricted = vars::register_bool("match_restricted", false, vars::var_flag_saved, "restrict match to tpp-mod users of compatible versions only");
 
 			var_match_password->set_callback = []()
 			{
@@ -486,12 +622,18 @@ namespace matchmaking
 					return;
 				}
 
-				set_slot_field(params.get_int(1), params.get(2), params.get_int(3));
+				set_slot_field(params.get_int(1), params.get(2), params.get(3));
 			});
 
 			command::add("matchstart", [](const command::params& params)
 			{
 				request_match_start = true;
+			});
+
+			register_callback(event_create_lobby, [](game::mgo_match_t*, game::steam_id)
+			{
+				update_kick_list();
+				update_match_password();
 			});
 		}
 
@@ -502,14 +644,11 @@ namespace matchmaking
 				return;
 			}
 
-			create_lobby_cb_hook.create(SELECT_VALUE_LANG(0x1405A18E0, 0x1466D0C80), create_lobby_cb_stub);
-			create_lobby_hook.create(SELECT_VALUE_LANG(0x1405A1B60, 0x1405A1380), create_lobby_stub);
-
-			// cap kick_num to 16
-			utils::hook::nop(SELECT_VALUE_LANG(0x1405A29DE, 0x0), 6);
-			utils::hook::call(SELECT_VALUE_LANG(0x1405A29DE, 0x0), atoi_stub); 
-			utils::hook::nop(SELECT_VALUE_LANG(0x1405D4AEE, 0x0), 6);
-			utils::hook::call(SELECT_VALUE_LANG(0x1405D4AEE, 0x0), atoi_stub);
+			create_lobby_cb_hook.create(SELECT_VALUE_LANG(0x1405A18D0, 0x0), create_lobby_cb_stub);
+			create_lobby_hook.create(SELECT_VALUE_LANG(0x1405A1B50, 0x0), create_lobby_stub);
+			join_lobby_cb_hook.create(SELECT_VALUE_LANG(0x1405A2F70, 0x0), join_lobby_cb_stub);
+			start_transition_hook.create(SELECT_VALUE_LANG(0x1408A23D0, 0x0), start_transition_stub);
+			match_start_hook.create(SELECT_VALUE_LANG(0x1408A1F10, 0x0), match_start_stub);
 
 			scheduler::once(hook_steam_matchmaking, scheduler::net);
 			scheduler::loop(run_frame, scheduler::session);

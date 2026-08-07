@@ -81,7 +81,24 @@ namespace text_chat::lobby
 				return;
 			}
 
-			const auto name = steam_friends->__vftable->GetFriendPersonaName(steam_friends, user);
+			auto is_self = false;
+			auto index = 0;
+			const auto client = session::get_client_by_steam_id(user.bits, &is_self, &index);
+			if (client == nullptr)
+			{
+				return;
+			}
+
+			auto name = session::get_player_name(static_cast<unsigned char>(index));
+			if (name == nullptr)
+			{
+				name = steam_friends->__vftable->GetFriendPersonaName(steam_friends, user);
+				if (name == nullptr)
+				{
+					return;
+				}
+			}
+
 			const auto is_team_message = msg_id == chat_team_message_msg_id;
 
 			const auto self_team = session::get_self_team();
@@ -153,7 +170,7 @@ namespace text_chat::lobby
 				return;
 			}
 
-			on_lobby_chat_msg_hook.create(SELECT_VALUE_LANG(0x1405A4000, 0x1405A3810), on_lobby_chat_msg_stub);
+			on_lobby_chat_msg_hook.create(SELECT_VALUE_LANG(0x1405A4000, 0x0), on_lobby_chat_msg_stub);
 
 			command::add("say", [](const command::params& params)
 			{
