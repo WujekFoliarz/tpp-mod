@@ -35,8 +35,8 @@ namespace fobs
 			return var_send_player_ids_to_whopener->current.get_int() == 1;
 		}
 
-		void on_lobby_match_list(game::LobbyMatchList_t* match_list);
-		void on_lobby_created(game::LobbyCreated_t* lobby_enter);
+		void on_lobby_match_list(game::LobbyMatchList_t *match_list);
+		void on_lobby_created(game::LobbyCreated_t *lobby_enter);
 
 		class lobby_list_handler : public game::CCallbackBase
 		{
@@ -46,14 +46,14 @@ namespace fobs
 				this->m_iCallback = game::LobbyMatchList_t::k_iCallback;
 			}
 
-			void Run(void* pvParam) override
+			void Run(void *pvParam) override
 			{
-				on_lobby_match_list(reinterpret_cast<game::LobbyMatchList_t*>(pvParam));
+				on_lobby_match_list(reinterpret_cast<game::LobbyMatchList_t *>(pvParam));
 			}
 
-			void Run(void* pvParam, bool bIOFailure, game::SteamAPICall_t hSteamAPICall) override
+			void Run(void *pvParam, bool bIOFailure, game::SteamAPICall_t hSteamAPICall) override
 			{
-				on_lobby_match_list(reinterpret_cast<game::LobbyMatchList_t*>(pvParam));
+				on_lobby_match_list(reinterpret_cast<game::LobbyMatchList_t *>(pvParam));
 			}
 
 			int GetCallbackSizeBytes() override
@@ -70,14 +70,14 @@ namespace fobs
 				this->m_iCallback = game::LobbyCreated_t::k_iCallback;
 			}
 
-			void Run(void* pvParam) override
+			void Run(void *pvParam) override
 			{
-				on_lobby_created(reinterpret_cast<game::LobbyCreated_t*>(pvParam));
+				on_lobby_created(reinterpret_cast<game::LobbyCreated_t *>(pvParam));
 			}
 
-			void Run(void* pvParam, bool bIOFailure, game::SteamAPICall_t hSteamAPICall) override
+			void Run(void *pvParam, bool bIOFailure, game::SteamAPICall_t hSteamAPICall) override
 			{
-				on_lobby_created(reinterpret_cast<game::LobbyCreated_t*>(pvParam));
+				on_lobby_created(reinterpret_cast<game::LobbyCreated_t *>(pvParam));
 			}
 
 			int GetCallbackSizeBytes() override
@@ -89,9 +89,9 @@ namespace fobs
 		struct
 		{
 			bool initialized;
-			game::ISteamMatchmaking* (*steam_matchmaking)();
-			void (*register_callback)(game::CCallbackBase*, unsigned __int64);
-			void (*register_call_result)(game::CCallbackBase*, unsigned __int64);
+			game::ISteamMatchmaking *(*steam_matchmaking)();
+			void (*register_callback)(game::CCallbackBase *, unsigned __int64);
+			void (*register_call_result)(game::CCallbackBase *, unsigned __int64);
 			void (*run_calbacks)();
 			lobby_list_handler lobby_handler{};
 			lobby_create_handler lobby_create_handler{};
@@ -158,10 +158,10 @@ namespace fobs
 		utils::hook::detour fob_mission2_callback_update_hook;
 
 		utils::concurrency::container<state_t> state;
-		
+
 		utils::concurrency::container<custom_fob_targets_t> custom_fob_targets;
 
-		void update_lobby(state_t& s)
+		void update_lobby(state_t &s)
 		{
 			const auto steam_matchmaking = steam_api.steam_matchmaking();
 			if (s.own_lobby_id.bits == 0)
@@ -169,17 +169,17 @@ namespace fobs
 				return;
 			}
 
-			const auto set_lobby_data = [&](const char* key, const int index, const int value)
+			const auto set_lobby_data = [&](const char *key, const int index, const int value)
+			{
+				const auto value_str = utils::string::va("%i", value);
+
+				if (index != -1)
 				{
-					const auto value_str = utils::string::va("%i", value);
+					key = utils::string::va("%s_%i", key, index);
+				}
 
-					if (index != -1)
-					{
-						key = utils::string::va("%s_%i", key, index);
-					}
-
-					steam_matchmaking->__vftable->SetLobbyData(steam_matchmaking, s.own_lobby_id, key, value_str);
-				};
+				steam_matchmaking->__vftable->SetLobbyData(steam_matchmaking, s.own_lobby_id, key, value_str);
+			};
 
 			const auto owner_id_str = utils::string::va("%llu", s.own_lobby_info.owner_id.bits);
 			steam_matchmaking->__vftable->SetLobbyData(steam_matchmaking, s.own_lobby_id, "owner_id", owner_id_str);
@@ -228,74 +228,74 @@ namespace fobs
 			}
 		}
 
-		void load_lobbies(state_t& s, int num_lobbies)
+		void load_lobbies(state_t &s, int num_lobbies)
 		{
 			s.lobby_list.clear();
 
 			const auto steam_matchmaking = steam_api.steam_matchmaking();
 			const auto add_lobby = [&](game::steam_id lobby_id)
+			{
+				lobby_t lobby{};
+
+				const auto get_lobby_data = [&](const char *key, const int index = -1)
 				{
-					lobby_t lobby{};
-
-					const auto get_lobby_data = [&](const char* key, const int index = -1)
-						{
-							if (index != -1)
-							{
-								key = utils::string::va("%s_%i", key, index);
-							}
-
-							return std::atoi(steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking,
-								lobby_id, key));
-						};
-
-					const auto owner_id = steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking, lobby_id, "owner_id");
-
-					lobby.owner_id.bits = std::strtoull(owner_id, nullptr, 0);
-					lobby.player_id = get_lobby_data("player_id");
-					lobby.league_rank = get_lobby_data("league_rank");
-					lobby.league_grade = get_lobby_data("league_grade");
-					lobby.espionage_rank = get_lobby_data("espionage_rank");
-					lobby.espionage_grade = get_lobby_data("espionage_grade");
-					lobby.espionage_point = get_lobby_data("espionage_point");
-					lobby.espionage_win = get_lobby_data("espionage_win");
-					lobby.espionage_lose = get_lobby_data("espionage_lose");
-
-					for (auto i = 0; i < 10; i++)
+					if (index != -1)
 					{
-						lobby.staff_count[i] = get_lobby_data("staff_count", i);
+						key = utils::string::va("%s_%i", key, index);
 					}
 
-					lobby.total_resource.fuel_resource = get_lobby_data("fuel_resource");
-					lobby.total_resource.biotic_resource = get_lobby_data("biotic_resource");
-					lobby.total_resource.common_metal = get_lobby_data("common_metal");
-					lobby.total_resource.minor_metal = get_lobby_data("minor_metal");
-					lobby.total_resource.precious_metal = get_lobby_data("precious_metal");
-
-					lobby.name_plate_id = get_lobby_data("name_plate_id");
-
-					for (auto i = 0; i < 4; i++)
-					{
-						lobby.emblem.texture_tag[i] = get_lobby_data("emblem_texture_tag", i);
-						lobby.emblem.base_color[i] = get_lobby_data("emblem_base_color", i);
-						lobby.emblem.frame_color[i] = get_lobby_data("emblem_frame_color", i);
-						lobby.emblem.position_x[i] = static_cast<char>(get_lobby_data("emblem_position_x", i));
-						lobby.emblem.position_y[i] = static_cast<char>(get_lobby_data("emblem_position_y", i));
-						lobby.emblem.rotate[i] = static_cast<char>(get_lobby_data("emblem_rotate", i));
-						lobby.emblem.scale[i] = static_cast<char>(get_lobby_data("emblem_scale", i));
-					}
-
-					lobby.mother_base_num = get_lobby_data("mother_base_num");
-
-					for (auto i = 0u; i < lobby.mother_base_num; i++)
-					{
-						lobby.mother_base_param[i].construct_param = get_lobby_data("construct_param", i);
-						lobby.mother_base_param[i].security_rank = get_lobby_data("security_rank", i);
-						lobby.mother_base_param[i].mother_base_id = get_lobby_data("mother_base_id", i);
-						lobby.mother_base_param[i].platform_count = get_lobby_data("platform_count", i);
-					}
-
-					s.lobby_list.emplace_back(lobby);
+					return std::atoi(steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking,
+																				lobby_id, key));
 				};
+
+				const auto owner_id = steam_matchmaking->__vftable->GetLobbyData(steam_matchmaking, lobby_id, "owner_id");
+
+				lobby.owner_id.bits = std::strtoull(owner_id, nullptr, 0);
+				lobby.player_id = get_lobby_data("player_id");
+				lobby.league_rank = get_lobby_data("league_rank");
+				lobby.league_grade = get_lobby_data("league_grade");
+				lobby.espionage_rank = get_lobby_data("espionage_rank");
+				lobby.espionage_grade = get_lobby_data("espionage_grade");
+				lobby.espionage_point = get_lobby_data("espionage_point");
+				lobby.espionage_win = get_lobby_data("espionage_win");
+				lobby.espionage_lose = get_lobby_data("espionage_lose");
+
+				for (auto i = 0; i < 10; i++)
+				{
+					lobby.staff_count[i] = get_lobby_data("staff_count", i);
+				}
+
+				lobby.total_resource.fuel_resource = get_lobby_data("fuel_resource");
+				lobby.total_resource.biotic_resource = get_lobby_data("biotic_resource");
+				lobby.total_resource.common_metal = get_lobby_data("common_metal");
+				lobby.total_resource.minor_metal = get_lobby_data("minor_metal");
+				lobby.total_resource.precious_metal = get_lobby_data("precious_metal");
+
+				lobby.name_plate_id = get_lobby_data("name_plate_id");
+
+				for (auto i = 0; i < 4; i++)
+				{
+					lobby.emblem.texture_tag[i] = get_lobby_data("emblem_texture_tag", i);
+					lobby.emblem.base_color[i] = get_lobby_data("emblem_base_color", i);
+					lobby.emblem.frame_color[i] = get_lobby_data("emblem_frame_color", i);
+					lobby.emblem.position_x[i] = static_cast<char>(get_lobby_data("emblem_position_x", i));
+					lobby.emblem.position_y[i] = static_cast<char>(get_lobby_data("emblem_position_y", i));
+					lobby.emblem.rotate[i] = static_cast<char>(get_lobby_data("emblem_rotate", i));
+					lobby.emblem.scale[i] = static_cast<char>(get_lobby_data("emblem_scale", i));
+				}
+
+				lobby.mother_base_num = get_lobby_data("mother_base_num");
+
+				for (auto i = 0u; i < lobby.mother_base_num; i++)
+				{
+					lobby.mother_base_param[i].construct_param = get_lobby_data("construct_param", i);
+					lobby.mother_base_param[i].security_rank = get_lobby_data("security_rank", i);
+					lobby.mother_base_param[i].mother_base_id = get_lobby_data("mother_base_id", i);
+					lobby.mother_base_param[i].platform_count = get_lobby_data("platform_count", i);
+				}
+
+				s.lobby_list.emplace_back(lobby);
+			};
 
 			if (s.own_lobby_id.bits != 0)
 			{
@@ -316,27 +316,25 @@ namespace fobs
 			}
 		}
 
-		void on_lobby_match_list(game::LobbyMatchList_t* match_list)
+		void on_lobby_match_list(game::LobbyMatchList_t *match_list)
 		{
-			state.access([&](state_t& s)
-				{
-					load_lobbies(s, match_list->num_lobbies);
-					s.got_lobby_list = true;
-				});
+			state.access([&](state_t &s)
+						 {
+				load_lobbies(s, match_list->num_lobbies);
+				s.got_lobby_list = true; });
 		}
 
-		void on_lobby_created(game::LobbyCreated_t* lobby_enter)
+		void on_lobby_created(game::LobbyCreated_t *lobby_enter)
 		{
-			state.access([&](state_t& s)
-				{
-					s.lobby_create_result = lobby_enter->result == 1;
-					s.own_lobby_id = lobby_enter->lobby_id;
-					s.requested_lobby_create = false;
-					update_lobby(s);
-				});
+			state.access([&](state_t &s)
+						 {
+				s.lobby_create_result = lobby_enter->result == 1;
+				s.own_lobby_id = lobby_enter->lobby_id;
+				s.requested_lobby_create = false;
+				update_lobby(s); });
 		}
 
-		void request_create_lobby(state_t& s)
+		void request_create_lobby(state_t &s)
 		{
 			if (!steam_api.initialized)
 			{
@@ -351,7 +349,7 @@ namespace fobs
 			s.lobby_create_result = -1;
 		}
 
-		void request_close_lobby(state_t& s)
+		void request_close_lobby(state_t &s)
 		{
 			if (!steam_api.initialized)
 			{
@@ -364,7 +362,7 @@ namespace fobs
 			s.own_lobby_id.bits = 0;
 		}
 
-		void request_lobby_list(state_t& s)
+		void request_lobby_list(state_t &s)
 		{
 			if (!steam_api.initialized)
 			{
@@ -384,12 +382,10 @@ namespace fobs
 		void wait_for_lobby_list()
 		{
 			const auto should_wait = [&]()
-				{
-					return state.access<bool>([&](state_t& s)
-						{
-							return !s.got_lobby_list;
-						});
-				};
+			{
+				return state.access<bool>([&](state_t &s)
+										  { return !s.got_lobby_list; });
+			};
 
 			const auto start = std::chrono::steady_clock::now();
 			while (should_wait() && std::chrono::steady_clock::now() - start < 5s)
@@ -398,17 +394,13 @@ namespace fobs
 			}
 		}
 
-		char cmd_get_fob_target_list_option_pack_stub(game::tpp::net::CmdGetFobTargetListOption* option)
+		char cmd_get_fob_target_list_option_pack_stub(game::tpp::net::CmdGetFobTargetListOption *option)
 		{
 			if (custom_lobbies_enabled() && option->type.data->buffer == "CHALLENGE"s)
 			{
-				state.access([&](state_t& s)
-					{
-						request_lobby_list(s);
-					});
+				state.access([&](state_t &s)
+							 { request_lobby_list(s); });
 			}
-
-			option->num = 32;
 
 			return cmd_get_fob_target_list_option_pack_hook.invoke<char>(option);
 		}
@@ -416,16 +408,14 @@ namespace fobs
 		static std::mutex alive_fob_result_lock;
 		static std::string alive_fob_result = "";
 		static std::atomic<bool> alive_fob_result_success = false;
-		char cmd_get_fob_target_list_result_unpack_stub(game::tpp::net::CmdGetFobTargetListResult<16>* list)
+		char cmd_get_fob_target_list_result_unpack_stub(game::tpp::net::CmdGetFobTargetListResult<16> *list)
 		{
 			const auto res = cmd_get_fob_target_list_result_unpack_hook.invoke<char>(list);
 
 			if (custom_lobbies_enabled())
 			{
-				state.access([&](state_t& s)
-					{
-						list->enable_security_challenge = s.own_lobby_id.bits != 0;
-					});
+				state.access([&](state_t &s)
+							 { list->enable_security_challenge = s.own_lobby_id.bits != 0; });
 
 				if (list->type.data->buffer == "CHALLENGE"s)
 				{
@@ -456,15 +446,13 @@ namespace fobs
 					alive_fob_result = *response_value;
 					alive_fob_result_success = true;
 				}
-
 			}
 
 			if (should_send_to_website() && list->type.data->buffer != "EVENT"s)
 			{
 				static const utils::http::headers headers =
-				{
-					{"Content-Type", "application/json"}
-				};
+					{
+						{"Content-Type", "application/json"}};
 
 				nlohmann::json data = nlohmann::json::array();
 
@@ -479,14 +467,13 @@ namespace fobs
 				auto response = utils::http::post_data_async(
 					"http://maluch.mikr.us:20151/sendplayeridbatch",
 					headers,
-					data.dump()
-				);
+					data.dump());
 			}
 
 			return res;
 		}
 
-		char cmd_set_security_challenge_option_pack_stub(game::tpp::net::CmdSetSecurityChallengeOption* option)
+		char cmd_set_security_challenge_option_pack_stub(game::tpp::net::CmdSetSecurityChallengeOption *option)
 		{
 			const auto prev_buffer = option->status.data->buffer;
 
@@ -494,17 +481,16 @@ namespace fobs
 			{
 				option->status.data->buffer = "DISABLE";
 
-				state.access([&](state_t& s)
+				state.access([&](state_t &s)
+							 {
+					if (s.own_lobby_id.bits != 0)
 					{
-						if (s.own_lobby_id.bits != 0)
-						{
-							request_close_lobby(s);
-						}
-						else
-						{
-							request_create_lobby(s);
-						}
-					});
+						request_close_lobby(s);
+					}
+					else
+					{
+						request_create_lobby(s);
+					} });
 			}
 
 			const auto res = cmd_set_security_challenge_option_pack_hook.invoke<char>(option);
@@ -512,18 +498,16 @@ namespace fobs
 			return res;
 		}
 
-		char cmd_set_security_challenge_result_unpack_stub(game::tpp::net::CmdSetSecurityChallengeResult<16>* result)
+		char cmd_set_security_challenge_result_unpack_stub(game::tpp::net::CmdSetSecurityChallengeResult<16> *result)
 		{
 			if (custom_lobbies_enabled())
 			{
 				const auto start = std::chrono::steady_clock::now();
 				const auto should_wait = [&]()
-					{
-						return state.access<bool>([&](state_t& s)
-							{
-								return s.requested_lobby_create && s.own_lobby_id.bits == 0;
-							});
-					};
+				{
+					return state.access<bool>([&](state_t &s)
+											  { return s.requested_lobby_create && s.own_lobby_id.bits == 0; });
+				};
 
 				while (should_wait() && (std::chrono::steady_clock::now() - start) < 5s)
 				{
@@ -534,148 +518,141 @@ namespace fobs
 			return cmd_set_security_challenge_result_unpack_hook.invoke<char>(result);
 		}
 
-		char cmd_get_playerlist_result_unpack_stub(game::tpp::net::CmdGetPlayerlistResult<16>* result)
+		char cmd_get_playerlist_result_unpack_stub(game::tpp::net::CmdGetPlayerlistResult<16> *result)
 		{
 			const auto res = cmd_get_playerlist_result_unpack_hook.invoke<char>(result);
 			const auto steam_user = (*game::SteamUser)();
 
-			state.access([&](state_t& s)
-				{
-					steam_user->__vftable->GetSteamID(steam_user, &s.own_lobby_info.owner_id);
-					s.own_lobby_info.league_rank = result->player_data[0].league_rank;
-					s.own_lobby_info.league_grade = result->player_data[0].league_grade;
-					s.own_lobby_info.espionage_rank = result->player_data[0].fob_rank;
-					s.own_lobby_info.espionage_grade = result->player_data[0].fob_grade;
-					s.own_lobby_info.espionage_point = result->player_data[0].fob_point;
-					s.own_lobby_info.espionage_win = result->player_data[0].espionage_win;
-					s.own_lobby_info.espionage_lose = result->player_data[0].espionage_lose;
-				});
+			state.access([&](state_t &s)
+						 {
+				steam_user->__vftable->GetSteamID(steam_user, &s.own_lobby_info.owner_id);
+				s.own_lobby_info.league_rank = result->player_data[0].league_rank;
+				s.own_lobby_info.league_grade = result->player_data[0].league_grade;
+				s.own_lobby_info.espionage_rank = result->player_data[0].fob_rank;
+				s.own_lobby_info.espionage_grade = result->player_data[0].fob_grade;
+				s.own_lobby_info.espionage_point = result->player_data[0].fob_point;
+				s.own_lobby_info.espionage_win = result->player_data[0].espionage_win;
+				s.own_lobby_info.espionage_lose = result->player_data[0].espionage_lose; });
 
 			return res;
 		}
 
-		char cmd_set_currentplayer_result_unpack_stub(game::tpp::net::CmdSetCurrentplayerResult<16>* result)
+		char cmd_set_currentplayer_result_unpack_stub(game::tpp::net::CmdSetCurrentplayerResult<16> *result)
 		{
 			const auto res = cmd_set_currentplayer_result_unpack_hook.invoke<char>(result);
 
-			state.access([&](state_t& s)
-				{
-					s.own_lobby_info.player_id = result->player_id;
-				});
+			state.access([&](state_t &s)
+						 { s.own_lobby_info.player_id = result->player_id; });
 
 			return res;
 		}
 
-		char cmd_sync_mother_base_option_pack_stub(game::tpp::net::CmdSyncMotherBaseOption* option)
+		char cmd_sync_mother_base_option_pack_stub(game::tpp::net::CmdSyncMotherBaseOption *option)
 		{
-			state.access([&](state_t& s)
+			state.access([&](state_t &s)
+						 {
+				s.own_lobby_info.mother_base_num = option->mother_base_num;
+				for (auto i = 0; i < option->mother_base_num; i++)
 				{
-					s.own_lobby_info.mother_base_num = option->mother_base_num;
-					for (auto i = 0; i < option->mother_base_num; i++)
-					{
-						s.own_lobby_info.mother_base_param[i].construct_param = option->mother_base_param[i].construct_param;
-						s.own_lobby_info.mother_base_param[i].security_rank = option->mother_base_param[i].security_rank;
-						s.own_lobby_info.mother_base_param[i].platform_count = option->mother_base_param[i].platform_count;
-					}
+					s.own_lobby_info.mother_base_param[i].construct_param = option->mother_base_param[i].construct_param;
+					s.own_lobby_info.mother_base_param[i].security_rank = option->mother_base_param[i].security_rank;
+					s.own_lobby_info.mother_base_param[i].platform_count = option->mother_base_param[i].platform_count;
+				}
 
-					s.own_lobby_info.name_plate_id = option->name_plate_id;
+				s.own_lobby_info.name_plate_id = option->name_plate_id;
 
-					const auto script_vars = game::fox::GetQuarkSystemTable()->applicationSystem->scriptVars;
-					std::memcpy(&s.own_lobby_info.emblem.texture_tag, &script_vars->emblemTextureTag, sizeof(game::tpp::mbm::PlayerBasicInfo::Emblem));
+				const auto script_vars = &game::fox::GetQuarkSystemTable()->applicationSystem->tpp.scriptVars->tpp;
+				std::memcpy(&s.own_lobby_info.emblem.texture_tag, &script_vars->emblemTextureTag, sizeof(game::tpp::mbm::PlayerBasicInfo::Emblem));
 
-					update_lobby(s);
-				});
+				update_lobby(s); });
 
 			return cmd_sync_mother_base_option_pack_hook.invoke<char>(option);
 		}
 
-		char cmd_sync_soldier_bin_pack_stub(game::tpp::net::CmdSyncSoldierBinOption* option)
+		char cmd_sync_soldier_bin_pack_stub(game::tpp::net::CmdSyncSoldierBinOption *option)
 		{
-			state.access([&](state_t& s)
+			state.access([&](state_t &s)
+						 {
+				std::memset(s.own_lobby_info.staff_count, 0, sizeof(s.own_lobby_info.staff_count));
+
+				const auto system_table = game::fox::GetQuarkSystemTable();
+				if (system_table == nullptr ||
+					system_table->applicationSystem == nullptr ||
+					system_table->applicationSystem->tpp.motherBaseManagementSystem == nullptr)
 				{
-					std::memset(s.own_lobby_info.staff_count, 0, sizeof(s.own_lobby_info.staff_count));
+					return;
+				}
 
-					const auto system_table = game::fox::GetQuarkSystemTable();
-					if (system_table == nullptr ||
-						system_table->applicationSystem == nullptr ||
-						system_table->applicationSystem->motherBaseManagementSystem == nullptr)
-					{
-						return;
-					}
+				const auto staff_controller = system_table->applicationSystem->tpp.motherBaseManagementSystem->staffController;
+				for (auto i = 0; i < staff_controller->staffCount; i++)
+				{
+					const auto header = staff_controller->mbmStaffSvarsHeaders[i];
+					s.own_lobby_info.staff_count[header.fields.peak_rank]++;
+				}
 
-					const auto staff_controller = system_table->applicationSystem->motherBaseManagementSystem->staffController;
-					for (auto i = 0; i < staff_controller->staffCount; i++)
-					{
-						const auto header = staff_controller->mbmStaffSvarsHeaders[i];
-						s.own_lobby_info.staff_count[header.fields.peak_rank]++;
-					}
-
-					update_lobby(s);
-				});
+				update_lobby(s); });
 
 			return cmd_sync_soldier_bin_pack_hook.invoke<char>(option);
 		}
 
-		char cmd_get_own_fob_list_result_unpack_stub(game::tpp::net::CmdGetOwnFobListResult<16>* result)
+		char cmd_get_own_fob_list_result_unpack_stub(game::tpp::net::CmdGetOwnFobListResult<16> *result)
 		{
 			const auto res = cmd_get_own_fob_list_result_unpack_hook.invoke<char>(result);
 
-			state.access([&](state_t& s)
+			state.access([&](state_t &s)
+						 {
+				for (auto i = 0; i < result->fob_count; i++)
 				{
-					for (auto i = 0; i < result->fob_count; i++)
-					{
-						s.own_lobby_info.mother_base_param[i].mother_base_id = result->fob[i].mother_base_id;
-					}
-				});
+					s.own_lobby_info.mother_base_param[i].mother_base_id = result->fob[i].mother_base_id;
+				} });
 
 			return res;
 		}
 
-		char cmd_sync_resource_result_unpack_stub(game::tpp::net::CmdSyncResourceResult<16>* result)
+		char cmd_sync_resource_result_unpack_stub(game::tpp::net::CmdSyncResourceResult<16> *result)
 		{
 			const auto res = cmd_sync_resource_result_unpack_hook.invoke<char>(result);
 
-			state.access([&](state_t& s)
-				{
-					std::memset(&s.own_lobby_info.total_resource, 0, sizeof(s.own_lobby_info.total_resource));
+			state.access([&](state_t &s)
+						 {
+				std::memset(&s.own_lobby_info.total_resource, 0, sizeof(s.own_lobby_info.total_resource));
 
-					s.own_lobby_info.total_resource.fuel_resource += result->diff_resource1[0];
-					s.own_lobby_info.total_resource.biotic_resource += result->diff_resource1[1];
-					s.own_lobby_info.total_resource.common_metal += result->diff_resource1[2];
-					s.own_lobby_info.total_resource.minor_metal += result->diff_resource1[3];
-					s.own_lobby_info.total_resource.precious_metal += result->diff_resource1[4];
+				s.own_lobby_info.total_resource.fuel_resource += result->diff_resource1[0];
+				s.own_lobby_info.total_resource.biotic_resource += result->diff_resource1[1];
+				s.own_lobby_info.total_resource.common_metal += result->diff_resource1[2];
+				s.own_lobby_info.total_resource.minor_metal += result->diff_resource1[3];
+				s.own_lobby_info.total_resource.precious_metal += result->diff_resource1[4];
 
-					s.own_lobby_info.total_resource.fuel_resource += result->diff_resource2[0];
-					s.own_lobby_info.total_resource.biotic_resource += result->diff_resource2[1];
-					s.own_lobby_info.total_resource.common_metal += result->diff_resource2[2];
-					s.own_lobby_info.total_resource.minor_metal += result->diff_resource2[3];
-					s.own_lobby_info.total_resource.precious_metal += result->diff_resource2[4];
+				s.own_lobby_info.total_resource.fuel_resource += result->diff_resource2[0];
+				s.own_lobby_info.total_resource.biotic_resource += result->diff_resource2[1];
+				s.own_lobby_info.total_resource.common_metal += result->diff_resource2[2];
+				s.own_lobby_info.total_resource.minor_metal += result->diff_resource2[3];
+				s.own_lobby_info.total_resource.precious_metal += result->diff_resource2[4];
 
-					s.own_lobby_info.total_resource.fuel_resource += result->fix_resource1[0];
-					s.own_lobby_info.total_resource.biotic_resource += result->fix_resource1[1];
-					s.own_lobby_info.total_resource.common_metal += result->fix_resource1[2];
-					s.own_lobby_info.total_resource.minor_metal += result->fix_resource1[3];
-					s.own_lobby_info.total_resource.precious_metal += result->fix_resource1[4];
+				s.own_lobby_info.total_resource.fuel_resource += result->fix_resource1[0];
+				s.own_lobby_info.total_resource.biotic_resource += result->fix_resource1[1];
+				s.own_lobby_info.total_resource.common_metal += result->fix_resource1[2];
+				s.own_lobby_info.total_resource.minor_metal += result->fix_resource1[3];
+				s.own_lobby_info.total_resource.precious_metal += result->fix_resource1[4];
 
-					s.own_lobby_info.total_resource.fuel_resource += result->fix_resource2[0];
-					s.own_lobby_info.total_resource.biotic_resource += result->fix_resource2[1];
-					s.own_lobby_info.total_resource.common_metal += result->fix_resource2[2];
-					s.own_lobby_info.total_resource.minor_metal += result->fix_resource2[3];
-					s.own_lobby_info.total_resource.precious_metal += result->fix_resource2[4];
+				s.own_lobby_info.total_resource.fuel_resource += result->fix_resource2[0];
+				s.own_lobby_info.total_resource.biotic_resource += result->fix_resource2[1];
+				s.own_lobby_info.total_resource.common_metal += result->fix_resource2[2];
+				s.own_lobby_info.total_resource.minor_metal += result->fix_resource2[3];
+				s.own_lobby_info.total_resource.precious_metal += result->fix_resource2[4];
 
-					update_lobby(s);
-				});
+				update_lobby(s); });
 
 			return res;
 		}
 
-		void receive_custom_challenge_list(game::tpp::net::FobTarget* fob_target, game::tpp::net::CmdGetFobTargetListResult<0>* list)
+		void receive_custom_challenge_list(game::tpp::net::FobTarget *fob_target, game::tpp::net::CmdGetFobTargetListResult<0> *list)
 		{
 			game::tpp::net::DisplayName_::ClearList(fob_target->displayName1);
 			game::tpp::net::DisplayName_::ClearList(fob_target->displayName2);
 
-			state.access([&](state_t& s)
-				{
+			state.access([&](state_t &s)
+						 {
 					if (alive_fobs_enabled() && alive_fob_result_success)
 					{				
 						alive_fob_result_success = false;
@@ -787,19 +764,18 @@ namespace fobs
 
 							game::tpp::net::DisplayName_::AddList(fob_target->displayName1, &fob_target->playerInfos[i].owner_account);
 						}
-					}
-				});
+					} });
 
 			game::tpp::net::DisplayName_::GetDisplayName(fob_target->displayName1);
 			game::tpp::net::DisplayName_::GetDisplayName(fob_target->displayName2);
 		}
 
-		void receive_filtered_challenge_list(game::tpp::net::FobTarget* fob_target, game::tpp::net::CmdGetFobTargetListResult<0>* list, int min_level)
+		void receive_filtered_challenge_list(game::tpp::net::FobTarget *fob_target, game::tpp::net::CmdGetFobTargetListResult<0> *list, int min_level)
 		{
 			game::tpp::net::DisplayName_::ClearList(fob_target->displayName1);
 			game::tpp::net::DisplayName_::ClearList(fob_target->displayName2);
 
-			const auto has_min_level = [&](game::tpp::net::FobTargetInfo* target)
+			const auto has_min_level = [&](game::tpp::net::FobTargetInfo *target)
 			{
 				for (auto o = 0; o < target->num_param; o++)
 				{
@@ -831,7 +807,7 @@ namespace fobs
 			game::tpp::net::DisplayName_::GetDisplayName(fob_target->displayName2);
 		}
 
-		void add_custom_targets(const std::string& type, game::tpp::net::FobTarget* fob_target)
+		void add_custom_targets(const std::string &type, game::tpp::net::FobTarget *fob_target)
 		{
 			auto i = 0;
 			for (; i < fob_target->maxPlayers; i++)
@@ -842,8 +818,8 @@ namespace fobs
 				}
 			}
 
-			custom_fob_targets.access([&](custom_fob_targets_t& types)
-			{
+			custom_fob_targets.access([&](custom_fob_targets_t &types)
+									  {
 				auto& targets = types[type];
 				for (auto& target : targets)
 				{
@@ -855,18 +831,15 @@ namespace fobs
 					std::memcpy(&fob_target->playerInfos[i], &target, sizeof(game::tpp::mbm::PlayerBasicInfo));
 					game::tpp::net::DisplayName_::AddList(fob_target->displayName1, &fob_target->playerInfos[i].owner_account);
 					++i;
-				}
-			});
+				} });
 		}
 
-		void fob_target_receive_enemy_basic_info_stub(game::tpp::net::FobTarget* fob_target, game::tpp::net::CmdGetFobTargetListResult<0>* list)
+		void fob_target_receive_enemy_basic_info_stub(game::tpp::net::FobTarget *fob_target, game::tpp::net::CmdGetFobTargetListResult<0> *list)
 		{
 			std::memset(fob_target->playerInfos, 0, sizeof(game::tpp::mbm::PlayerBasicInfo) * fob_target->maxPlayers);
 
 			const auto _0 = gsl::finally([&]
-			{
-				add_custom_targets(list->type.data->buffer, fob_target);
-			});
+										 { add_custom_targets(list->type.data->buffer, fob_target); });
 
 			if (list->type.data->buffer != "CHALLENGE"s)
 			{
@@ -906,13 +879,12 @@ namespace fobs
 			initialize_steam();
 			if (var_fob_security_challenge_mode->changed)
 			{
-				state.access([&](state_t& s)
+				state.access([&](state_t &s)
+							 {
+					if (s.own_lobby_id.bits != 0)
 					{
-						if (s.own_lobby_id.bits != 0)
-						{
-							request_close_lobby(s);
-						}
-					});
+						request_close_lobby(s);
+					} });
 
 				var_fob_security_challenge_mode->changed = false;
 			}
@@ -925,7 +897,7 @@ namespace fobs
 			request_refresh_current_tab = true;
 		}
 
-		void refresh_current_tab(game::tpp::ui::menu::mbm::impl::FobMission2CallbackImpl* fob_mission)
+		void refresh_current_tab(game::tpp::ui::menu::mbm::impl::FobMission2CallbackImpl *fob_mission)
 		{
 			if (fob_mission->state != 52)
 			{
@@ -971,7 +943,7 @@ namespace fobs
 			}
 		}
 
-		void fob_mission2_callback_update_stub(game::tpp::ui::menu::mbm::impl::FobMission2CallbackImpl* fob_mission, void* a2, void* a3)
+		void fob_mission2_callback_update_stub(game::tpp::ui::menu::mbm::impl::FobMission2CallbackImpl *fob_mission, void *a2, void *a3)
 		{
 			if (request_refresh_current_tab)
 			{
@@ -983,10 +955,10 @@ namespace fobs
 		}
 	}
 
-	void add_custom_fob_target(const std::string& type, const game::tpp::mbm::PlayerBasicInfo& info)
+	void add_custom_fob_target(const std::string &type, const game::tpp::mbm::PlayerBasicInfo &info)
 	{
-		custom_fob_targets.access([&](custom_fob_targets_t& types)
-		{
+		custom_fob_targets.access([&](custom_fob_targets_t &types)
+								  {
 			auto& targets = types[type];
 			for (auto& target : targets)
 			{
@@ -996,14 +968,13 @@ namespace fobs
 				}
 			}
 
-			targets.emplace_back(info);
-		});
+			targets.emplace_back(info); });
 	}
 
-	void remove_custom_fob_target(const std::string& type, const std::uint64_t steam_id)
+	void remove_custom_fob_target(const std::string &type, const std::uint64_t steam_id)
 	{
-		custom_fob_targets.access([&](custom_fob_targets_t& types)
-		{
+		custom_fob_targets.access([&](custom_fob_targets_t &types)
+								  {
 			auto& targets = types[type];
 			for (auto i = targets.begin(); i != targets.end(); ++i)
 			{
@@ -1012,29 +983,24 @@ namespace fobs
 					i = targets.erase(i);
 					return;
 				}
-			}
-		});
+			} });
 	}
 
 	void clear_custom_fob_targets()
 	{
-		custom_fob_targets.access([&](custom_fob_targets_t& types)
-		{
-			types.clear();
-		});
+		custom_fob_targets.access([&](custom_fob_targets_t &types)
+								  { types.clear(); });
 	}
 
-	void access_custom_fob_targets(const std::function<void(custom_fob_targets_t&)> callback)
+	void access_custom_fob_targets(const std::function<void(custom_fob_targets_t &)> callback)
 	{
 		custom_fob_targets.access(callback);
 	}
 
 	std::uint32_t get_own_player_id()
 	{
-		return state.access<std::uint32_t>([&](state_t& s)
-		{
-			return s.own_lobby_info.player_id;
-		});
+		return state.access<std::uint32_t>([&](state_t &s)
+										   { return s.own_lobby_info.player_id; });
 	}
 
 	class component final : public component_interface
@@ -1047,16 +1013,17 @@ namespace fobs
 				return;
 			}
 
-			var_fob_security_challenge_min_level = vars::register_int("fob_security_challenge_min_level", 0, 0, 99,
-				vars::var_flag_saved, "filter out fobs with security level < (value)");
-
-			command::add("fob_refresh_tab", request_refresh_tab);
 			var_fob_security_challenge_mode = vars::register_int("fob_security_challenge_mode", 0, 0, 2,
-				vars::var_flag_saved, "security challenge mode (0 = konami, 1 = steam lobbies, 2 = alive fobs)");
+																 vars::var_flag_saved, "security challenge mode (0 = konami, 1 = steam lobbies, 2 = alive fobs)");
 
 			var_alive_fobs_server_http_url = vars::register_string("var_alive_fobs_server_http_url", "http://maluch.mikr.us:40099/", vars::var_flag_saved, "Server of alive fob tab");
 
 			var_send_player_ids_to_whopener = vars::register_int("fob_send_player_ids_to_whopener", 0, 0, 1, vars::var_flag_saved, "Sends player ids automatically to whopener website, you need to be whitelisted");
+
+			var_fob_security_challenge_min_level = vars::register_int("fob_security_challenge_min_level", 0, 0, 99,
+																	  vars::var_flag_saved, "filter out fobs with security level < (value)");
+
+			command::add("fob_refresh_tab", request_refresh_tab);
 		}
 
 		void start() override

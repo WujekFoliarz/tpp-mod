@@ -5,7 +5,6 @@
 
 #include "vars.hpp"
 #include "scheduler.hpp"
-#include "console.hpp"
 
 #include <utils/hook.hpp>
 #include <utils/flags.hpp>
@@ -456,10 +455,7 @@ namespace patches
 					utils::hook::jump(SELECT_VALUE_LANG(0x14090F210, 0x0), SELECT_VALUE_LANG(0x14090F21B, 0x0));
 				}
 
-				get_ramble_speed_hook.create(SELECT_VALUE_LANG(0x1468DA3F0, 0x1484C25F0), get_ramble_speed_stub);
-
-				utils::hook::nop(SELECT_VALUE_LANG(0x1405597A1, 0x144B8861D), 6);
-				utils::hook::call(SELECT_VALUE_LANG(0x1405597A1, 0x144B8861D), strncpy_s_stub);
+				get_ramble_speed_hook.create(SELECT_VALUE_LANG(0x140AFD550, 0x0), get_ramble_speed_stub);
 			}
 
 			utils::hook::nop(SELECT_VALUE(0x1400013F9, 0x1400014E9, 0x0, 0x0), 6);
