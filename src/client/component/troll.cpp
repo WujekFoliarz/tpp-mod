@@ -31,7 +31,7 @@ namespace troll
 
         void replace_pickup_with_follow()
         {
-            constexpr uintptr_t RVA_PICKUP = 0x0221C7B0;
+            constexpr uintptr_t RVA_PICKUP = 0x0221C6B0;
             uintptr_t base = (uintptr_t)GetModuleHandle(NULL);
             char* addr = (char*)(base + RVA_PICKUP);
 
@@ -47,7 +47,7 @@ namespace troll
 
         void replace_pickup_high_with_emergency()
         {
-            constexpr uintptr_t RVA_PICKUP_HIGH = 0x0221C790;
+            constexpr uintptr_t RVA_PICKUP_HIGH = 0x0221C690;
             uintptr_t base = (uintptr_t)GetModuleHandle(NULL);
             char* addr = (char*)(base + RVA_PICKUP_HIGH);
 
@@ -63,7 +63,7 @@ namespace troll
 
         void replace_pickup_high_with_follow()
         {
-            constexpr uintptr_t RVA_PICKUP_HIGH = 0x0221C790;
+            constexpr uintptr_t RVA_PICKUP_HIGH = 0x0221C690;
             uintptr_t base = (uintptr_t)GetModuleHandle(NULL);
             char* addr = (char*)(base + RVA_PICKUP_HIGH);
 
