@@ -50,10 +50,12 @@ namespace session
 			const auto is_host = main_session->sessionInterface.__vftable->IsHost(&main_session->sessionInterface);
 			const auto state = main_session->__vftable->tpp.GetState(main_session);
 			const auto all_members = &main_session->allMembers;
+			const auto ruleset = get_active_ruleset();
 
 			printf("is host: %i\n", is_host);
 			printf("state: %s (%i)\n", get_session_state_name(state), state);
 			printf("ping: %ims\n", get_rtt(main_session));
+			printf("ruleset state: %i %p\n", ruleset != nullptr ? ruleset->state : 0, ruleset);
 			if (game::environment::is_tpp())
 			{
 				printf("num flags ping  steam_id                         name                            \n");
@@ -64,8 +66,6 @@ namespace session
 				printf("num flags ping  steam_id                         name                             team\n");
 				printf("--- ----- ----- -------------------------------- -------------------------------- ----\n");
 			}
-
-			const auto ruleset = get_active_ruleset();
 
 			for (auto i = 0u; i < all_members->size; i++)
 			{
@@ -352,6 +352,17 @@ namespace session
 		return ruleset->playerTeams[ruleset->localPlayerSessionIndex];
 	}
 
+	const char* get_player_name(const unsigned char index)
+	{
+		const auto ruleset = get_active_ruleset();
+		if (ruleset == nullptr || index >= ruleset->numPlayers)
+		{
+			return nullptr;
+		}
+
+		return ruleset->unk1.__vftable->GetGamerTagBySessionIndex(&ruleset->unk1, index);
+	}
+
 	class component final : public component_interface
 	{
 	public:
@@ -438,7 +449,7 @@ namespace session
 
 				command::add("session_close", [](const command::params& params)
 				{
-					utils::hook::invoke<void>(SELECT_VALUE_LANG(0x146457B20, 0x148087770));
+					utils::hook::invoke<void>(SELECT_VALUE_LANG(0x146457B20, 0x0));
 				});
 
 				command::add("session_connect", [](const command::params& params)
