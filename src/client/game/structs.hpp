@@ -112,6 +112,11 @@ namespace game
 		int chatroom;
 	};
 
+	struct P2PSessionRequest_t
+	{
+		steam_id remote;
+	};
+
 	struct /*VFT*/ ISteamUser_vtbl
 	{
 		int(__fastcall* GetHSteamUser)(ISteamUser* this_);
@@ -329,7 +334,17 @@ namespace game
 	{
 		struct Value
 		{
-			char __pad0[24];
+			union u_t
+			{
+				int integer;
+				double value;
+				char byte;
+				void* ptr;
+			};
+
+			u_t u;
+			char type;
+			char __pad0[8];
 		};
 	}
 
@@ -339,11 +354,6 @@ namespace game
 		{
 
 		};
-	}
-
-	namespace tpp::ui::menu
-	{
-		struct UiCommonDataManager;
 	}
 
 	namespace gn
@@ -424,6 +434,11 @@ namespace game
 			};
 			vtable* __vftable;
 			pfimpl pf;
+		};
+
+		struct Mutex
+		{
+			char __pad0[16];
 		};
 
 		struct Quark
@@ -528,9 +543,36 @@ namespace game
 			char __pad0[16];
 		};
 
+		struct Script
+		{
+
+		};
+
+		struct HashMapBase_unk1
+		{
+			void** ptr_array1;
+			void* ptr1;
+		};
+
 		struct HashMapBase
 		{
-			char __pad0[48];
+			struct vtable
+			{
+
+			};
+			vtable* __vftable;
+			HashMapBase_unk1* unk1;
+			HashMapBase_unk1* unk2;
+			int a1;
+			short a2_1;
+			short a2_2;
+			void* end;
+			void* ptr6;
+			void* unk3;
+			void* unk4;
+			int unk5_1;
+			int unk5_2;
+			void* unk6;
 		};
 
 		namespace fs
@@ -647,34 +689,87 @@ namespace game
 
 				struct _TextureGlyphData
 				{
-					float a1;
-					float a2;
-					char a3_1;
-					char a3_2;
-					char a3_3;
-					char a3_4;
-					char a4_1;
-					char a4_2;
-					char a4_3;
-					char a4_4;
+					unsigned short character;
+					unsigned short a1_2;
+					unsigned short a2_1;
+					unsigned short a2_2;
+					unsigned char a3_1;
+					unsigned char a3_2;
+					unsigned char a3_3;
+					unsigned char horizontalSpace;
+					unsigned char width;
+					unsigned char height;
+					char horizontalShift;
+					char verticalShift;
 					float a5;
 					float a6;
 					float a7;
 					float a8;
 				};
 
+				struct _TextureAreaInfo
+				{
+					int a1;
+					short width;
+					short height;
+					short a3_1;
+					short a3_2;
+					short a4_1;
+					short a4_2;
+				};
+
 				struct ImageGlyphManager
 				{
-					char __pad0[8];
+					struct vtable
+					{
+						void(__fastcall* __destructor)(ImageGlyphManager*, char);
+					};
+
+					vtable* __vftable;
 					_TextureGlyphData* imageGlyphs;
-					fox::HashMapBase hashMap;
-					char __pad1[24];
+					HashMapBase hashMap;
 					int numGlyphs;
 					int numUnk;
 					char __pad2[256];
 				};
 
-				struct FontSystem_unk1
+				struct ImageAreaManager
+				{
+					struct vtable
+					{
+						void(__fastcall* __destructor)(ImageAreaManager*, char);
+					};
+
+					vtable* __vftable;
+					_TextureAreaInfo areas[2048];
+					char states[2048];
+					int count;
+					int a2;
+					HashMapBase hashMap;
+				};
+
+				struct FontTextureRender
+				{
+					struct vtable
+					{
+						void(__fastcall* __destructor)(FontTextureRender*);
+					};
+
+					vtable* __vftable;
+					unsigned int pixel_width;
+					unsigned int pixel_height;
+					unsigned int fontTextureHandle;
+					char __pad1[4];
+					void* unk1;
+					char __pad2[16];
+					void* unk2;
+					char __pad3[16];
+					ImageGlyphManager* imageGlyphManager;
+					ImageAreaManager* imageAreaManager;
+					char __pad4[1072];
+				};
+
+				struct FontSystem_unk2
 				{
 					char __pad0[10];
 					char c1;
@@ -683,18 +778,88 @@ namespace game
 					char c2;
 				};
 
-				struct FontSystem_unk2
+				struct MemoryManager_unk1
 				{
-					char __pad0[72];
-					ImageGlyphManager* imageGlyphManager;
+					size_t unk1;
+					void* unk2;
+					size_t unk3;
+					size_t unk4;
+				};
+
+				struct MemoryManager
+				{
+					MemoryManager_unk1* unk1;
+					size_t size;
+				};
+
+				struct FontData_Glyph
+				{
+					unsigned int character;
+					unsigned short xOffset;
+					unsigned short yOffset;
+					unsigned char width;
+					unsigned char height;
+					unsigned char layer;
+					unsigned char horizontalSpace;
+					unsigned char horizontalShift;
+					char verticalShift;
+					unsigned short unk1;
+					unsigned int unk2;
+				};
+
+				struct FontData
+				{
+					struct vtable
+					{
+
+					};
+
+					vtable* __vftable;
+					unsigned char unk1_1;
+					unsigned char unk1_2;
+					unsigned char unk1_3;
+					unsigned char unk1_4;
+					short unk2;
+					short glyphCount;
+					int glyphDataSize;
+					unsigned char spacing;
+					unsigned char unk3_2;
+					unsigned char unk3_3;
+					unsigned char unk3_4;
+					FontData_Glyph* glyphs;
+					char unk4;
+					char widthExp;
+					char heightExp;
+					char unk5;
+					int fontDataSize;
+					void* fontDataBuffer;
+					MemoryManager* memoryManager;
+					float width;
+					float height;
+					short defaultCharacter;
+					unsigned char fontIndex;
+					unsigned char unk7;
 				};
 
 				struct FontSystem
 				{
+					/*
+					0: default
+					1: FontSystem_LatinFont
+					2: FontSystem_KanjiFont
+					3: FontSystem_Slot3
+					4: FontSystem_Slot4
+					5: FontSystem_Slot5
+					6: FontSystem_Slot6
+					7: FontSystem_Slot7
+					8: 
+					*/
+
 					char __pad0[8];
-					void* ptr_array1[9];
-					fox::gr::dg::FontSystem_unk1* unk1;
-					fox::gr::dg::FontSystem_unk2* unk2;
+					FontData* fonts[8];
+					MemoryManager* memoryManager;
+					FontTextureRender* fontTextureRender;
+					FontSystem_unk2* unk2;
 				};
 
 				struct DynamicVertexBuffer_unk1
@@ -755,9 +920,21 @@ namespace game
 
 				};
 
+				struct ShadowConstantRegister_buffer
+				{
+					float vec[4];
+				};
+
+				struct ShadowConstantRegister_unk1
+				{
+					ShadowConstantRegister_buffer* buffers;
+					char __pad0[24];
+				};
+
 				struct ShadowConstantRegister
 				{
-
+					char __pad0[8];
+					ShadowConstantRegister_unk1 unk1[1];
 				};
 
 				struct CommandBuffer
@@ -1567,6 +1744,20 @@ namespace game
 
 			};
 
+			struct SteamUdpSocket
+			{
+				struct SteamUdpAddress
+				{
+					struct vtable
+					{
+
+					};
+
+					vtable* __vftable;
+					steam_id remote;
+				};
+			};
+
 			namespace impl
 			{
 				struct SppSocketImpl_mgo
@@ -1618,6 +1809,11 @@ namespace game
 			T** array;
 		};
 
+		struct Entity
+		{
+
+		};
+
 		namespace nt
 		{
 			struct SessionUserId;
@@ -1654,17 +1850,17 @@ namespace game
 
 			struct Member_SessionInterface;
 
-			struct Member_SessionInterface_vtbl
-			{
-				int(__fastcall* GetIndex)(Member* this_);
-				void* (__fastcall* GetIntAnimationController)(Member* this_);
-				void(__fastcall* GetSessionIdString)(Member* this_, char*, void*);
-				void(__fastcall* __destructor)(Member* this_);
-			};
-
 			struct Member_SessionInterface
 			{
-				Member_SessionInterface_vtbl* __vftable;
+				struct vtable
+				{
+					int(__fastcall* GetIndex)(Member_SessionInterface* this_);
+					void* (__fastcall* GetIntAnimationController)(Member_SessionInterface* this_);
+					void(__fastcall* GetSessionIdString)(Member_SessionInterface* this_, char*, void*);
+					void(__fastcall* __destructor)(Member_SessionInterface* this_);
+				};
+
+				vtable* __vftable;
 			};
 
 			struct Member
@@ -1693,6 +1889,17 @@ namespace game
 				void* a2;
 				void* a3;
 				unsigned int size;
+			};
+
+			enum SessionNotify_t
+			{
+				NOTIFY_SESSION_CREATE = 0,
+				NOTIFY_SESSION_CLOSE = 1,
+				NOTIFY_SESSION_DELETE = 2,
+				NOTIFY_UNK3 = 3, // error?/update
+				NOTIFY_JOIN_MEMBER = 4,
+				NOTIFY_DELETE_MEMBER = 5,
+				NOTIFY_COUNT = 6,
 			};
 
 			namespace impl
@@ -1828,9 +2035,9 @@ namespace game
 
 				struct SessionImpl2_SessionInterface_vtbl
 				{
-					void* (__fastcall* GetLocalMemberInterface)(SessionImpl2_SessionInterface* this_);
-					void* (__fastcall* GetHostMemberInterface)(SessionImpl2_SessionInterface* this_);
-					void* (__fastcall* GetMemberInterfaceAtIndex)(SessionImpl2_SessionInterface* this_, void*);
+					Member_SessionInterface* (__fastcall* GetLocalMemberInterface)(SessionImpl2_SessionInterface* this_);
+					Member_SessionInterface* (__fastcall* GetHostMemberInterface)(SessionImpl2_SessionInterface* this_);
+					Member_SessionInterface* (__fastcall* GetMemberInterfaceAtIndex)(SessionImpl2_SessionInterface* this_, int);
 					int(__fastcall* GetMemberCount)(SessionImpl2_SessionInterface* this_);
 					unsigned int(__fastcall* GetOriginalValueCount)(SessionImpl2_SessionInterface* this_);
 					bool(__fastcall* IsHost)(SessionImpl2_SessionInterface* this_);
@@ -1874,7 +2081,7 @@ namespace game
 					fox::nt::Member* hostMember;
 					fox::nt::Group allMembers;
 					fox::nt::Group peerMembers;
-					unsigned int flags;
+					unsigned int state;
 					char sessionIndex;
 					void* a4;
 					int a5;
@@ -1895,9 +2102,113 @@ namespace game
 				};
 
 				static_assert(sizeof(SessionImpl2) == 232);
+
+				struct GameSocketImpl;
+				struct GameSocketImpl
+				{
+					struct Peer
+					{
+
+					};
+
+					struct vtable
+					{
+						void(__fastcall* RequestToSend)(GameSocketImpl*, int, const void*, unsigned int);
+						void(__fastcall* RequestToSendToMember)(GameSocketImpl*, char, int, const void*, unsigned int);
+						void(__fastcall* RequestToSendToMembers)(GameSocketImpl*, int, int, const void*, unsigned int);
+						unsigned int(__fastcall* GetPacketCount)(GameSocketImpl*, unsigned int);
+						unsigned int(__fastcall* GetPacketSize)(GameSocketImpl*, unsigned int, unsigned int);
+						void* (__fastcall* GetPacket)(GameSocketImpl*, unsigned int, unsigned int);
+						unsigned char(__fastcall* GetPacketSender)(GameSocketImpl*, unsigned int, unsigned int);
+						void(__fastcall* SetInterval)(GameSocketImpl*, int, unsigned char, float);
+						void(__fastcall* __destructor)(GameSocketImpl*, char);
+					};
+
+					vtable* __vftable;
+					short a1;
+					short a2;
+					char a3_1;
+					char a3_2;
+					short a4;
+					int a5;
+					int a6;
+					void* buf1;
+					void* buf2;
+				};
 			}
+
+			struct Session : impl::SessionImpl2
+			{
+			};
+
+			template <typename T>
+			struct ObserverContainer
+			{
+
+			};
+
+			template <typename T>
+			struct ObserverBase
+			{
+				struct vtable
+				{
+					void(__fastcall* NotifyImpl)(ObserverBase<T>*, fox::nt::impl::SessionImpl2*, int, unsigned __int8* a4);
+					void(__fastcall* __destructor)(ObserverBase<T>*);
+				};
+				vtable* __vftable;
+				ObserverContainer<T>* container;
+			};
 		}
 	
+		namespace gm
+		{
+			enum PeerType
+			{
+				PEER_LOCAL = 0,
+				PEER_HOST = 1,
+				PEER_AUTHORITY = 2,
+				PEER_ALL = 3,
+				PEER_DIRECT = 4,
+			};
+
+			enum NetType
+			{
+
+			};
+
+			struct GameObjectMessageSystem
+			{
+				struct vtable
+				{
+					void(__fastcall* __destructor)(GameObjectMessageSystem*);
+					void(__fastcall* SendSignal)(GameObjectMessageSystem*, int* result, __int64 objectId, int peerType, const void* buffer, unsigned __int16 size, int a7, char memberIndex);
+					void(__fastcall* SendToSessionId)(GameObjectMessageSystem*);
+					void(__fastcall* SerialProcessSignals)(GameObjectMessageSystem*);
+				};
+
+				vtable* __vftable;
+			};
+
+			namespace impl
+			{
+				struct GameObjectMessageSystemImpl
+				{
+					struct vtable
+					{
+
+					};
+
+					vtable* __vftable;
+					fox::nt::ObserverBase<fox::nt::Session> sessionObserver;
+					GameObjectMessageSystem messageSystem;
+					fox::nt::impl::GameSocketImpl* sockets[3];
+					char __pad1[104];
+					Mutex mutex;
+					char __pad2[184];
+				};
+			}
+		}
+
 		namespace ncl
 		{
 #pragma pack(push, 8)
@@ -2040,6 +2351,27 @@ namespace game
 		{
 			namespace impl
 			{
+				struct MbDvcSoundControllerImpl;
+
+				struct MbDvcSoundControllerImpl
+				{
+					struct vtable
+					{
+						void(__fastcall* __destructor)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*);
+						void(__fastcall* Update)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*);
+						void(__fastcall* Stop)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*);
+						void(__fastcall* RequestVoice)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*, unsigned __int8 a2);
+						void(__fastcall* CancelRequestVoice)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*);
+						void(__fastcall* SetDelayTime)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*);
+						void(__fastcall* SetMbDvcOpen)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*);
+						void(__fastcall* SetVoiceInvalid)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*);
+						void(__fastcall* SetAllVoiceInvalid)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*);
+						void(__fastcall* GetVoiceTypeByName)(tpp::ui::menu::impl::MbDvcSoundControllerImpl*);
+					};
+
+					vtable* __vftable;
+				};
+
 				struct MenuSystemImpl
 				{
 					struct vtable
@@ -2151,6 +2483,19 @@ namespace game
 				};
 			}
 
+			struct UiCommonDataManager
+			{
+				struct vtable
+				{
+
+				};
+
+				vtable* __vftable;
+				char __pad0[128];
+				impl::MbDvcSoundControllerImpl* soundController;
+
+			};
+
 			namespace mbm
 			{
 				namespace impl
@@ -2168,11 +2513,53 @@ namespace game
 			}
 		}
 
+		namespace hud
+		{
+			namespace impl
+			{
+				struct HudSystemImpl_mgo_unk1
+				{
+					char __pad0[0x28BD];
+					char showScores;
+				};
+
+				struct HudSystemImpl_mgo
+				{
+					struct vtable
+					{
+
+					};
+
+					vtable* __vftable;
+					char __pad0[0x92B0];
+					HudSystemImpl_mgo_unk1 unk1;
+				};
+
+				struct HudSystemImpl_tpp
+				{
+					struct vtable
+					{
+
+					};
+
+					vtable* __vftable;
+				};
+
+				union HudSystemImpl
+				{
+					HudSystemImpl_tpp tpp;
+					HudSystemImpl_mgo mgo;
+				};
+			}
+		}
+
 		namespace impl
 		{
 			struct UiSystemImpl
 			{
-				char __pad0[80];
+				char __pad0[24];
+				tpp::ui::hud::impl::HudSystemImpl* hudSystem;
+				char __pad1[48];
 				tpp::ui::menu::impl::MenuSystemImpl* menuSystem;
 			};
 		}
@@ -3806,8 +4193,9 @@ namespace game
 			mbm::PlayerBasicInfo* playerInfos;
 			char __pad2[8];
 			short maxPlayers;
-			char __pad3[10];
+			char __pad3[6];
 			SessionConnectInfo* sessionConnectInfo;
+			char __pad4[4];
 			DisplayName* displayName1;
 			DisplayName* displayName2;
 		};
@@ -8155,24 +8543,40 @@ namespace game
 			char __pad0[32];
 		};
 
+		struct Ruleset_Player
+		{
+
+		};
+
+		struct Ruleset_unk2
+		{
+			char __pad0[24];
+			void* rulesetData;
+		};
+
 		struct Ruleset
 		{
-			char __pad0[88];
+			char __pad0[56];
+			Ruleset_unk2* unk2;
+			char __pad9[24];
 			Ruleset_unk1 unk1;
 			char __pad1[64];
 			int numTeams;
 			TeamInfo** teams;
 			char __pad2[20];
 			int numPlayers;
-			char __pad3[136];
+			tpp::mp::Ruleset_Player** players;
+			char __pad3[128];
 			int a1;
-			char __pad4[88];
+			char __pad4[68];
+			fox::Script* script;
+			char __pad5[12];
 			int state;
-			char __pad5[60];
+			char __pad6[60];
 			unsigned char currentRound;
-			char __pad6[9];
+			char __pad7[9];
 			unsigned char localPlayerSessionIndex;
-			char __pad7[961];
+			char __pad8[961];
 			char playerTeams[16];
 		};
 
@@ -8274,6 +8678,28 @@ namespace game
 	};
 
 #pragma pack(push, 1)
+	struct mgo_match_data_member_t
+	{
+		char unk[8];
+		char name[32];
+		char __pad0[5];
+		steam_id id;
+		char __pad1[9];
+	};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+	struct mgo_match_data_t
+	{
+		match_slot_t slot;
+		match_rules_t rules;
+		mgo_match_data_member_t members[16];
+		char member_num;
+		char member_limit;
+	};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
 	struct mgo_match_t
 	{
 		int error1;
@@ -8296,7 +8722,8 @@ namespace game
 		char __pad6[2];
 		match_rules_t match_rules;
 		steam_id lobby_id2;
-		char __pad7[420];
+		char __pad7[412];
+		mgo_match_data_t* data;
 		steam_id kicked_ids[16];
 		int kick_num;
 		char __pad8[852];

@@ -23,6 +23,8 @@ namespace lui::renderer
 			std::size_t count;
 		} draw_list{};
 
+		std::unique_ptr<::renderer::draw2d_t> draw_instance;
+
 		template <typename T>
 		T* allocate_draw_command()
 		{
@@ -188,7 +190,7 @@ namespace lui::renderer
 			return;
 		}
 
-		::renderer::on_frame(render_ui);
+		draw_instance = ::renderer::register_draw(render_ui, ::renderer::priority_topmost);
 	}
 	
 	void end()

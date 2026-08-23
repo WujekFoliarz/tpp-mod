@@ -211,7 +211,7 @@ namespace binds
 
 		bool is_action_command(const std::string& cmd)
 		{
-			return action_commands.contains(cmd) || cmd.starts_with("+");
+			return action_commands.contains(cmd);
 		}
 
 		bool execute_command(const std::string& cmd, bool is_down, bool was_down)
@@ -287,23 +287,30 @@ namespace binds
 		bool handle_input_keyboard(RAWINPUT* raw_input)
 		{
 			BYTE key_state[256]{};
-			WORD key_char[8]{};
+			WCHAR buffer_utf[32]{};
+			WORD buffer_ascii[8]{};
 
-			int key_ascii = -1;
+			int character = -1;
+			int character_ascii = -1;
 			int key = raw_input->data.keyboard.VKey;
 
 			if (!GetKeyboardState(key_state))
 			{
 				return false;
 			}
-
-			if (ToAscii(raw_input->data.keyboard.VKey, raw_input->data.keyboard.MakeCode, key_state, key_char, 0) > 0)
+			
+			if (ToUnicode(raw_input->data.keyboard.VKey, raw_input->data.keyboard.MakeCode, key_state, buffer_utf, 32, 0) > 0)
 			{
-				key_ascii = key_char[0];
+				character = buffer_utf[0];
+			}
 
-				if (key_ascii >= 'a' && key_ascii <= 'z')
+			if (ToAscii(raw_input->data.keyboard.VKey, raw_input->data.keyboard.MakeCode, key_state, buffer_ascii, 0) > 0)
+			{
+				character_ascii = buffer_ascii[0];
+
+				if (character >= 'a' && character <= 'z')
 				{
-					key = toupper(key_char[0]);
+					key = toupper(buffer_utf[0]);
 				}
 			}
 
@@ -325,19 +332,19 @@ namespace binds
 
 			if (game_console::handle_key(key, is_down, is_game_console_bind(key)))
 			{
-				game_console::handle_char(key_ascii, is_down);
+				game_console::handle_char(character_ascii, is_down);
 				return true;
 			}
 
 			if (text_chat::input::handle_key(key, is_down, is_game_console_bind(key)))
 			{
-				text_chat::input::handle_char(key_ascii, is_down);
+				text_chat::input::handle_char(character, is_down);
 				return true;
 			}
 
 			if (lui::input::handle_key(key, is_down, is_game_console_bind(key)))
 			{
-				lui::input::handle_char(key_ascii, is_down);
+				lui::input::handle_char(character, is_down);
 				return true;
 			}
 
@@ -542,11 +549,6 @@ namespace binds
 
 		buffer.append("unbindall\r\n");
 
-		for (const auto& alias : command::get_aliases())
-		{
-			buffer.append(utils::string::va("alias \"%s\" \"%s\"\r\n", alias.first.data(), alias.second.data()));
-		}
-
 		for (const auto& [key, bind] : binds)
 		{
 			if (bind.mode == command)
@@ -605,6 +607,18 @@ namespace binds
 		return false;
 	}
 
+	void release_all_keys()
+	{
+		for (auto i = ' '; i < 'Z'; i++)
+		{
+			game::fox::RawKeyboardData data{};
+			data.isUp = true;
+			data.key = game::fox::g_vkKeyTable[i];
+			data.keyAscii = -1;
+			data.keyUnicode = 0;
+			game::fox::KeyboardListener_::SetRawKeyData(&data);
+		}
+	}
 
 	class component final : public component_interface
 	{

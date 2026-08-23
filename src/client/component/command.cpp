@@ -9,6 +9,7 @@
 #include "vars.hpp"
 #include "filesystem.hpp"
 #include "binds.hpp"
+#include "scripting.hpp"
 
 #include <utils/io.hpp>
 #include <utils/string.hpp>
@@ -178,6 +179,11 @@ namespace command
 			for (auto i = 0; i < cmds.size(); i++)
 			{
 				const auto args = tokenize_string(cmds[i]);
+				if (args.empty())
+				{
+					continue;
+				}
+
 				if (args[0] == "wait")
 				{
 					auto wait_time = 0;
@@ -396,6 +402,11 @@ namespace command
 		});
 	}
 
+	void remove(const std::string& name)
+	{
+		commands.erase(name);
+	}
+
 	std::optional<std::string> find_command_name(const std::string& input)
 	{
 		if (input.size() < 2)
@@ -442,6 +453,7 @@ namespace command
 			}
 		};
 
+		auto was_space = false;
 		for (auto i = 0; i < str.size(); i++)
 		{
 			const auto c = str[i];
@@ -454,10 +466,11 @@ namespace command
 					add_token(true);
 				}
 
+				was_space = false;
 				is_in_quotes = !is_in_quotes;
 				continue;
 			}
-			else if (c == ' ')
+			else if (c == ' ' || c == '\t')
 			{
 				if (is_in_quotes)
 				{
@@ -465,6 +478,12 @@ namespace command
 				}
 				else
 				{
+					if (was_space)
+					{
+						continue;
+					}
+
+					was_space = true;
 					is_in_word = false;
 					add_token();
 					continue;
@@ -477,6 +496,7 @@ namespace command
 					is_in_word = true;
 				}
 
+				was_space = false;
 				current_token.push_back(c);
 			}
 		}
@@ -529,7 +549,7 @@ namespace command
 					const auto name = params.get(1);
 					const auto cmd = params.get(2);
 					aliases[name] = cmd;
-					binds::write_binds();
+					vars::write_config();
 				}
 			});
 		}
@@ -640,6 +660,20 @@ namespace command
 				{
 					utils::nt::start_process("mgsvtpp.exe");
 					utils::nt::terminate();
+				});
+			}
+
+			if (game::environment::is_mgo())
+			{
+				command::add("editavatar", []()
+				{
+					const auto script_vars = game::fox::GetQuarkSystemTable()->applicationSystem->mgo.scriptVars;
+					if (script_vars->mgo.rulesetId != 4)
+					{
+						return;
+					}
+
+					scripting::script_exec("if (svars.seq_sequence == 3) then svars.seq_sequence = 4 end");
 				});
 			}
 		}
