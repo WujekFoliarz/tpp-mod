@@ -70,8 +70,8 @@ namespace game
 
 		namespace LuaScopedGlobalPolicy_
 		{
-			WEAK symbol<void(LuaScopedGlobalPolicy*, lua::lua_State*, int)> LuaScopedGlobalPolicy_{0x14006A850, 0x0, 0x0, 0x0};
-			WEAK symbol<void(LuaScopedGlobalPolicy*)> LuaScopedGlobalPolicy__destructor{0x14006AA40, 0x0, 0x0, 0x0};
+			WEAK symbol<void(LuaScopedGlobalPolicy*, lua::lua_State*, int)> LuaScopedGlobalPolicy_{0x14006A850, 0x14006B100, 0x0, 0x0};
+			WEAK symbol<void(LuaScopedGlobalPolicy*)> LuaScopedGlobalPolicy__destructor{0x14006AA40, 0x14006B2F0, 0x0, 0x0};
 		}
 
 		namespace Script_
@@ -164,6 +164,8 @@ namespace game
 
 			WEAK symbol<unsigned char> g_packetSize{0x1429E5130, 0x141E96100, 0x0, 0x0};
 
+			WEAK symbol<RenderWork*> g_renderWork{0x142B73580, 0x14206C330, 0x0, 0x0};
+
 			namespace Draw2D_
 			{
 				WEAK symbol<void(Draw2D*)> Draw2D_{0x1401BFCA0, 0x140AAFC80, 0x0, 0x0};
@@ -196,6 +198,8 @@ namespace game
 
 			namespace dg
 			{
+				WEAK symbol<DgDx11*()> GetDgInstance{0x140204E80, 0x140B145C0, 0x0, 0x0};
+
 				namespace CommandBuffer_
 				{
 					WEAK symbol<void(CommandBuffer*, int, unsigned int)> SetTexture{0x1402D8AA0, 0x140BC9F70, 0x0, 0x0};
@@ -419,7 +423,8 @@ namespace game
 			namespace ServerManager_
 			{
 				WEAK symbol<FobTarget*(ServerManager*)> GetFobTarget{0x1407D6470, 0x0, 0x0, 0x0};
-				WEAK symbol<ServerManager*> s_instance{0x142BEFC00, 0x0, 0x0, 0x0};
+				WEAK symbol<SessionControl*(ServerManager*)> GetSessionControl{0x1407D6810, 0x1405760C0, 0x0, 0x0};
+				WEAK symbol<ServerManager*> s_instance{0x142BEFC00, 0x141F89DB0, 0x0, 0x0};
 			}
 
 			namespace FobTarget_

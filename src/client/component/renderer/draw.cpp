@@ -728,7 +728,7 @@ namespace renderer
 				float new_color[4]{};
 				if (c == '^' && get_color_code(static_cast<wchar_t>(c_next), new_color))
 				{
-					const auto current_color = instance->commandBuffer->shadowConstantRegister->unk1[3].buffers[1].vec;
+					const auto current_color = instance->commandBuffer->shadowConstantRegister->buffers[3].vectors[1].vec;
 					const auto product = current_color[0] * current_color[1] * current_color[2];
 
 					if (product > 0.f)
@@ -1259,7 +1259,7 @@ namespace renderer
 				draw_object_hook.create(SELECT_VALUE(0x1402E6BE0, 0x140BD94A0, 0x0, 0x0), draw_object_stub);
 			}
 
-			void on_game_initialized() override
+			void game_initialized() override
 			{
 				if (!r_draw_priority_test->current.enabled())
 				{
