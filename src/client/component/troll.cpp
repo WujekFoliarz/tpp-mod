@@ -42,7 +42,7 @@ namespace troll
             }
 
             utils::hook::copy(addr, "", 7);
-            utils::hook::copy(addr, "FOLLOW", 6);
+            utils::hook::copy(addr, "FOLLOW\0", 7);
         }
 
         void replace_pickup_high_with_emergency()
@@ -58,7 +58,7 @@ namespace troll
             }
 
             utils::hook::copy(addr, "", 12);
-            utils::hook::copy(addr, "EMERGENCY", 9);
+            utils::hook::copy(addr, "EMERGENCY\0", 10);
         }
 
         void replace_pickup_high_with_follow()
@@ -74,7 +74,7 @@ namespace troll
             }
 
             utils::hook::copy(addr, "", 12);
-            utils::hook::copy(addr, "FOLLOW", 6);
+            utils::hook::copy(addr, "FOLLOW\0", 7);
             console::info("[troll] Replaced PICKUP_HIGH with FOLLOW");
         }
 
