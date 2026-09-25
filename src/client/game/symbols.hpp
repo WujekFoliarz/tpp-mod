@@ -47,7 +47,7 @@ namespace game
 
 		namespace MouseListener_
 		{
-			WEAK symbol<void(fox::RawMouseData*)> SetRawData{0x140031AF0, 0x1402827E0, 0x0, 0x0};
+			WEAK symbol<void(fox::RawMouseData*)> SetRawData{0x140031AF0, 0x1400312B0, 0x0, 0x0};
 		}
 
 		namespace Mutex_
@@ -327,13 +327,6 @@ namespace game
 		}
 	}
 
-	namespace luaext
-	{
-		WEAK symbol<void*(lua::lua_State*, const char*, __int64, __int64, __int64)> lua_bind_start{0x141A158E0, 0x141472990, 0x0, 0x0};
-		WEAK symbol<void*(void*, const char*, void*, __int64, __int64, __int64)> lua_bind_closure{0x141A15690, 0x141472740, 0x0, 0x0};
-		WEAK symbol<void* (void*, __int64, __int64, __int64)> lua_bind_end{0x141A15760, 0x141472810, 0x0, 0x0};
-	}
-
 	namespace tpp
 	{
 		namespace sys
@@ -461,6 +454,13 @@ namespace game
 		}
 	}
 
+	namespace luaext
+	{
+		WEAK symbol<void* (lua::lua_State*, const char*, __int64, __int64, __int64)> lua_bind_start{0x141A158E0, 0x141472990, 0x0, 0x0};
+		WEAK symbol<void* (void*, const char*, void*, __int64, __int64, __int64)> lua_bind_closure{0x141A15690, 0x141472740, 0x0, 0x0};
+		WEAK symbol<void* (void*, __int64, __int64, __int64)> lua_bind_end{0x141A15760, 0x141472810, 0x0, 0x0};
+	}
+
 	namespace lua
 	{
 		WEAK symbol<int(lua_State* s, const char* buffer, 
@@ -476,6 +476,7 @@ namespace game
 		WEAK symbol<int(lua_State* L, int)> lua_type{0x141A12300, 0x14146E100, 0x0, 0x0};
 		WEAK symbol<const char*(lua_State* L, int)> lua_typename{0x141A12330, 0x14146E130, 0x0, 0x0};
 		WEAK symbol<int(lua_State* L, int)> lua_next{0x141A11600, 0x14146D3F0, 0x0, 0x0};
+		WEAK symbol<int(lua_State* L)> lua_gettop{0x141A112E0, 0x14146D0D0, 0x0, 0x0};
 		WEAK symbol<void(lua_State* L, int)> lua_settop{0x141A11F70, 0x14146DD60, 0x0, 0x0};
 		WEAK symbol<void(lua_State* L, int)> lua_remove{0x141A11C20, 0x14146DA10, 0x0, 0x0};
 
@@ -488,7 +489,7 @@ namespace game
 		WEAK symbol<void(lua_State* L, const char*)> lua_pushstring{0x141A11970, 0x14146D760, 0x0, 0x0};
 		WEAK symbol<void(lua_State* L, double)> lua_pushnumber{0x141A11950, 0x14146D740, 0x0, 0x0};
 		WEAK symbol<void(lua_State* L, int)> lua_pushinteger{0x141A11880, 0x14146D670, 0x0, 0x0};
-		WEAK symbol<void(lua_State* L, int)> lua_pushboolean{0x141C9A140, 0x14146D540, 0x0, 0x0};
+		WEAK symbol<void(lua_State* L, int)> lua_pushboolean{0x141A11750, 0x14146D540, 0x0, 0x0};
 
 #define game_lua_pop(L,n) game::lua::lua_settop(L, -(n)-1)
 	}
@@ -499,6 +500,7 @@ namespace game
 	WEAK symbol<ISteamFriends*(*)()> SteamFriends{0x14208E110, 0x1416F10C0, 0x0, 0x0};
 	WEAK symbol<ISteamMatchmaking*(*)()> SteamMatchmaking{0x0, 0x1416F10F8, 0x0, 0x0};
 	WEAK symbol<ISteamUser*(*)()> SteamUser{0x14208E128, 0x1416F1108, 0x0, 0x0};
+	WEAK symbol<ISteamApps*(*)()> SteamApps{0x14208E120, 0x1416F10B0, 0x0, 0x0};
 
 	WEAK symbol<fox::nt::impl::SessionImpl2*> s_pSession{0x142B9DFB0, 0x14209B420, 0x0, 0x0};
 	WEAK symbol<fox::nt::impl::SessionIdle*> s_idleSession{0x142B9E000, 0x14209B470, 0x0, 0x0};

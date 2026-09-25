@@ -67,18 +67,18 @@ namespace scripting
 
 	lua_value::lua_value(game::lua::lua_State* state, int index)
 	{
-		this->type_ = game::lua::lua_type(state, -1);
+		this->type_ = game::lua::lua_type(state, index);
 		size_t len{};
 		switch (this->type_)
 		{
 		case LUA_TBOOLEAN:
-			this->value_ = game::lua::lua_toboolean(state, -1);
+			this->value_ = game::lua::lua_toboolean(state, index);
 			break;
 		case LUA_TNUMBER:
-			this->value_ = game::lua::lua_tonumber(state, -1);
+			this->value_ = game::lua::lua_tonumber(state, index);
 			break;
 		case LUA_TSTRING:
-			this->value_ = game::lua::lua_tolstring(state, -1, &len);
+			this->value_ = game::lua::lua_tolstring(state, index, &len);
 			break;
 		}
 	}
@@ -162,7 +162,7 @@ namespace scripting
 
 		void print_loading_script(const std::string& name)
 		{
-			console::info("Loading custom lua script '%s'\n", name.data());
+			console::info("[lua] Loading custom lua script '%s'\n", name.data());
 		}
 
 		void load_script(const std::string& path)
@@ -271,15 +271,20 @@ namespace scripting
 		}
 
 		template <console::console_type Type>
-		void lua_print(game::lua::lua_State* s)
+		int lua_print(game::lua::lua_State* s)
 		{
 			if (var_lua_logging->current.get_int() < 2)
 			{
-				return;
+				return 0;
 			}
 
 			size_t len{};
-			const char* cstr = game::lua::lua_tolstring(s, -1, &len);
+			const auto cstr = game::lua::lua_tolstring(s, -1, &len);
+			if (cstr == nullptr)
+			{
+				return 0;
+			}
+
 			std::string str(cstr, len);
 
 			const char* type_name = "Log";
@@ -294,6 +299,7 @@ namespace scripting
 			}
 
 			console::print(Type, "[Fox.%s] %s\n", type_name, str.data());
+			return 0;
 		}
 
 		std::string get_table_value(game::lua::lua_State* state)
@@ -695,6 +701,26 @@ namespace scripting
 			}
 		}
 
+		int l_print(game::lua::lua_State* state)
+		{
+			std::string buffer;
+
+			const auto argc = game::lua::lua_gettop(state);
+			for (auto i = 0; i < argc; i++)
+			{
+				const auto value = lua_value(state, i + 1);
+				buffer.append(value.to_string());
+
+				if (i < argc - 1)
+				{
+					buffer.append("\t");
+				}
+			}
+
+			console::info("[TppMod.Print] %s\n", buffer.data());
+			return 0;
+		}
+
 		void lua_func_register_functions_stub()
 		{
 			lua_func_register_functions_hook.invoke<void>();
@@ -713,6 +739,7 @@ namespace scripting
 				game::luaext::lua_bind_closure(bind, "GetVarInt", l_get_var_int, 1, 0, 0);
 				game::luaext::lua_bind_closure(bind, "GetVarFloat", l_get_var_float, 1, 0, 0);
 				game::luaext::lua_bind_closure(bind, "GetVarBool", l_get_var_bool, 1, 0, 0);
+				game::luaext::lua_bind_closure(bind, "Print", l_print, 1, 0, 0);
 				game::luaext::lua_bind_end(bind, 0, 0, 0);
 			}
 		}
